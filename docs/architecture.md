@@ -1,6 +1,6 @@
 # LuminX — Technisch Ontwerp
 
-> Status: **concept, ter goedkeuring**. Nog geen implementatie.
+> Status: **vastgesteld** (2026-07-09). De beslissingen in §15 zijn genomen; M0 staat, M1 is nog niet begonnen.
 > Doel: de ontbrekende schakel tussen moderne frontend-frameworks en CMS'en.
 > Eerste doel-CMS: Craft CMS 5. CLI-first. Volledig deterministisch. Geen AI, geen LLM's, geen externe API's.
 
@@ -279,6 +279,18 @@ De adapter is de enige plek waar het woord `Craft` in TypeScript voorkomt. Een g
 
 **`handle` is verplicht, `name` optioneel.** Jouw voorbeeld gebruikte alleen `name: "Pages"`. Een `name` is een label voor redacteuren en móet vrij hernoembaar zijn. Als het label tegelijk de sleutel is, is hernoemen niet te onderscheiden van "verwijder + maak nieuw" — en dan verliest de klant content. Dus: `handle` is de sleutel, `name` is cosmetisch en vrij te wijzigen. Ontbreekt `name`, dan wordt hij afgeleid uit de handle (`pages` → `Pages`).
 
+**`previousHandle` maakt het hernoemen van de sleutel zelf mogelijk.** Omdat `handle` de sleutel is, is de `logicalId` eruit afgeleid (`section:pages`). Hernoem je de handle, dan verandert de logicalId mee en vindt de differ in het lockfile niets onder de nieuwe sleutel: hij ziet een verdwenen resource en een nieuwe. Dat is precies de destructieve recreate die we wilden vermijden. Het lockfile lost dit niet vanzelf op — het is een map ván logicalId, niet naar iets dat een handle-wijziging overleeft.
+
+De hint is daarom expliciet:
+
+```jsonc
+{ "handle": "sitePages", "previousHandle": "pages", "name": "Site Pages" }
+```
+
+De compiler zoekt `section:pages` op in het lockfile, koppelt die UID aan `section:sitePages` en de differ genereert een `update`. Na een geslaagde apply mag `previousHandle` weg; hij is een migratie-instructie, geen staat. Ontbreekt de oude logicalId in het lockfile, dan is dat een validatiefout — niet stil een `create`.
+
+Waarom geen heuristiek ("één verdwenen en één nieuwe section van hetzelfde kind, dus vast een hernoeming")? Omdat raden kernprincipe 1 breekt, en omdat de prijs van een verkeerde gok verloren content is. Waarom geen onveranderlijke `id` per resource? Dat zou werken, maar §5.2 houdt de config handgeschreven en vrij van machine-identiteiten; die horen in het lockfile. `previousHandle` betaalt alleen wie daadwerkelijk hernoemt, is zichtbaar in code review, en verdwijnt weer.
+
 **`$ref` voor herbruikbare velden.** Zonder dit dupliceer je velddefinities over entry types heen en gaan ze uiteenlopen. De compiler expandeert `$ref` en garandeert dat één handle exact één definitie heeft — conflicterende definities zijn een validatiefout, geen "laatste wint".
 
 **Geen `id`, geen `uid` in de config.** Die horen in het lockfile.
@@ -300,7 +312,7 @@ De adapter is de enige plek waar het woord `Craft` in TypeScript voorkomt. Een g
 
 Dit bestand doet drie dingen:
 
-1. **Hernoemen mogelijk maken.** Verandert `handle` van `pages` → `sitePages`, dan vindt de differ via het lockfile de bestaande UID en genereert een *update*, geen destructieve recreate.
+1. **Hernoemen mogelijk maken.** Het lockfile bewaart de UID per logicalId. Wijzigt alleen `name`, dan blijft de logicalId gelijk en volgt vanzelf een *update*. Wijzigt de `handle`, dan wijst `previousHandle` de differ naar de oude logicalId (§5.2); zonder die hint is een handle-wijziging niet te onderscheiden van verwijderen-en-aanmaken, en wordt hij ook niet zo behandeld.
 2. **Snelle skip-detectie.** De `hash` is de canonieke hash van de gecompileerde resource. Gelijk aan wat er staat ⇒ `Skipped`, zonder round-trip naar PHP voor die resource.
 3. **Drift zichtbaar maken.** Wijkt de CMS-staat af van de hash terwijl de config niet veranderde, dan is er handmatig in de CP gerommeld. `doctor` rapporteert dat.
 
@@ -820,13 +832,18 @@ M8 en M10 zijn de risicomomenten: dáár schrijft LuminX voor het eerst, en dá�
 
 ---
 
-## 15. Openstaande beslissingen
+## 15. Beslissingen
 
-Deze horen vóór M1 beantwoord, niet ontdekt tijdens M8.
+Vastgelegd op 2026-07-09, vóór M1. Elke regel hieronder stuurt types die in `shared` landen; ze achteraf omkeren is een refactor, geen wijziging.
 
-1. **Config-formaat.** JSON (zoals gespecificeerd) is machine-schrijfbaar en schema-valideerbaar, maar kent geen commentaar. Alternatief: JSON blijft de canonieke vorm, en `luminx.config.jsonc` wordt geaccepteerd. Voorstel: **JSON + JSONC-parser**, `$schema` voor editor-autocomplete.
-2. **`handle` vs `name` als sleutel.** Ik stel `handle` verplicht (§5.2). Dit wijkt af van je voorbeeldconfig. Nodig voor veilig hernoemen.
-3. **Entry types top-level of genest.** Craft 5 maakt ze herbruikbaar. Voorstel: genest schrijven mag, compiler hijst en dedupliceert; `entryTypes` op top-level is óók toegestaan.
-4. **`sync` vs `generate`.** Zijn dit twee commando's of is `sync` een alias met `--prune`-mogelijkheid? Voorstel: aparte commando's, gedeelde pijplijn — `generate` is additief, `sync` is verzoenend.
-5. **Navigation in v1?** Vereist een externe plugin. Voorstel: interface en generator bouwen, maar in v1 als `experimental` markeren.
-6. **Licentie.** MIT voor alles behalve `@luminx/deploy`. Vastleggen vóór de eerste publieke commit — achteraf herlicentiëren met contributors is pijnlijk.
+1. **Config-formaat: JSON canoniek, JSONC geaccepteerd.** `$schema` blijft werken voor editor-autocomplete. Dit is veilig omdat niets de config ooit terugschrijft ná `init` — commentaar kan dus niet sneuvelen. Zou een later commando de config wél herschrijven, dan vervalt die garantie en moet deze beslissing opnieuw.
+
+2. **`handle` is de sleutel; hernoemen gaat via `previousHandle`.** Zie §5.2. Geen heuristiek (breekt kernprincipe 1) en geen machine-`id` in de config (die hoort in het lockfile). Ontbreekt de oude logicalId in het lockfile, dan is dat een validatiefout, geen stille `create`.
+
+3. **Entry types mogen genest; de compiler hijst en dedupliceert op handle.** Top-level `entryTypes` is ook toegestaan. Twee definities met dezelfde handle en verschillende velden zijn een validatiefout — nooit "laatste wint".
+
+4. **`generate` en `sync` zijn aparte commando's met een gedeelde pijplijn.** `generate` is additief, `sync` verzoent en kent `--prune` en `--check`. Verschillende houdingen verdienen verschillende namen; destructief gedrag mag nooit één vergeten flag verwijderd zijn van additief gedrag (§8.2).
+
+5. **Navigation komt in v1, gemarkeerd als `experimental`.** De feature is bijzaak; het provider-patroon is de hoofdzaak. Het is het referentievoorbeeld voor optionele, plugin-backed generators en dus het model voor SEOmatic, Neo, Super Table en Vizy (§9.4). Dat patroon bewijs je vroeg of je betaalt er later voor.
+
+6. **MIT voor alles wat nu bestaat.** Herlicentiëren is alleen pijnlijk voor bestaande code met contributors. `@luminx/deploy` bestaat nog niet en kan straks als nieuw pakket onder een eigen licentie uitkomen zonder iemands toestemming. Voorwaarde blijft §11.3: de open-source CLI is volledig bruikbaar zonder `deploy`.
