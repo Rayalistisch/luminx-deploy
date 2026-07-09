@@ -1,0 +1,11 @@
+{
+  "//": "Solution file. Holds no sources; only orchestrates project references.",
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/core" },
+    { "path": "packages/parsers" },
+    { "path": "packages/adapter-craft" },
+    { "path": "packages/cli" }
+  ]
+}

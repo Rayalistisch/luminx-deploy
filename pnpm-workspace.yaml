@@ -1,0 +1,5 @@
+packages:
+  - 'packages/*'
+
+# Packages that are PHP-only and must not be treated as Node workspaces.
+ignoredBuiltDependencies: []

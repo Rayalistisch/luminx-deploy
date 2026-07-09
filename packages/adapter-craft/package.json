@@ -1,0 +1,24 @@
+{
+  "name": "@luminx/adapter-craft",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CmsAdapter implementation for Craft CMS 5. Speaks the wire protocol to the craft-luminx plugin.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@luminx/core": "workspace:*",
+    "@luminx/shared": "workspace:*"
+  }
+}
