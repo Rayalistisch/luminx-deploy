@@ -122,10 +122,11 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
   };
 };
 
-const configPathOf = (parsed: ParsedCli, cwd: string): string => {
+/** The project root and the config path are separate: `--config` may point outside the project. */
+const locate = (parsed: ParsedCli, cwd: string): { root: string; configPath: string } => {
   const root = parsed.cwd === undefined ? cwd : resolve(cwd, parsed.cwd);
   const config = parsed.config ?? DEFAULT_CONFIG;
-  return isAbsolute(config) ? config : resolve(root, config);
+  return { root, configPath: isAbsolute(config) ? config : resolve(root, config) };
 };
 
 export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promise<ExitCode> => {
@@ -152,7 +153,7 @@ export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promis
     return ExitCode.ConfigError;
   }
 
-  const configPath = configPathOf(parsed, cwd);
+  const { root, configPath } = locate(parsed, cwd);
 
   switch (parsed.command) {
     case 'init':
@@ -164,7 +165,7 @@ export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promis
       });
 
     case 'doctor':
-      return runDoctor(io, { configPath, json: parsed.json });
+      return runDoctor(io, { configPath, root, json: parsed.json });
 
     default:
       throw new UsageError(`Unknown command: ${parsed.command}`);

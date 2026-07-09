@@ -8,6 +8,8 @@
  */
 
 import { compile, loadConfig } from '@luminx/core';
+import { probeProject } from '@luminx/parsers';
+import type { ProjectFacts } from '@luminx/parsers';
 import type { HealthCheck, LuminxError } from '@luminx/shared';
 
 import { ExitCode, exitCodeForAll } from '../exit.js';
@@ -16,6 +18,7 @@ import { renderChecks, renderErrors, renderJson } from '../render.js';
 
 export interface DoctorOptions {
   readonly configPath: string;
+  readonly root: string;
   readonly json: boolean;
 }
 
@@ -42,8 +45,72 @@ const checkNode = (version: string): HealthCheck => {
   };
 };
 
-export const collectChecks = async (configPath: string): Promise<DoctorReport> => {
-  const checks: HealthCheck[] = [checkNode(process.version)];
+/** What the project looks like from the outside. None of this needs the CMS to be reachable. */
+const projectChecks = (facts: ProjectFacts): readonly HealthCheck[] => {
+  const checks: HealthCheck[] = [];
+
+  if (facts.composer === null) {
+    checks.push({
+      id: 'project.composer',
+      label: 'Composer project',
+      status: 'warn',
+      detail: 'no readable composer.json',
+      fix: 'LuminX targets PHP CMSes. Is this the project root?',
+    });
+  } else if (facts.composer.lock === 'unreadable') {
+    // Not the same as never having installed: this lock file exists and lies.
+    checks.push({
+      id: 'project.composer',
+      label: 'Composer project',
+      status: 'fail',
+      detail: 'composer.lock is corrupt',
+      fix: 'Run `composer install` to regenerate it.',
+    });
+  } else if (facts.composer.lock === 'absent') {
+    checks.push({
+      id: 'project.composer',
+      label: 'Composer project',
+      status: 'warn',
+      detail: 'no composer.lock; nothing is installed',
+      fix: 'Run `composer install`.',
+    });
+  } else {
+    checks.push({
+      id: 'project.composer',
+      label: 'Composer project',
+      status: 'pass',
+      detail: `${Object.keys(facts.composer.installed).length} packages installed`,
+    });
+  }
+
+  checks.push({
+    id: 'project.runner',
+    label: 'Runner',
+    status: 'pass',
+    detail:
+      facts.detectedRunners.length > 1
+        ? `${facts.runner} (also found: ${facts.detectedRunners.slice(1).join(', ')})`
+        : facts.runner,
+    ...(facts.runner === 'local'
+      ? { fix: 'No container markers found. LuminX will call PHP directly.' }
+      : {}),
+  });
+
+  if (facts.frameworks.length > 0) {
+    checks.push({
+      id: 'project.frontend',
+      label: 'Frontend',
+      status: 'pass',
+      detail: facts.frameworks.map((f) => `${f.id} ${f.constraint}`).join(', '),
+    });
+  }
+
+  return checks;
+};
+
+export const collectChecks = async (configPath: string, root: string): Promise<DoctorReport> => {
+  const facts = await probeProject(root);
+  const checks: HealthCheck[] = [checkNode(process.version), ...projectChecks(facts)];
 
   const loaded = await loadConfig(configPath);
 
@@ -109,7 +176,7 @@ export const collectChecks = async (configPath: string): Promise<DoctorReport> =
 };
 
 export const runDoctor = async (io: Io, options: DoctorOptions): Promise<ExitCode> => {
-  const report = await collectChecks(options.configPath);
+  const report = await collectChecks(options.configPath, options.root);
 
   if (options.json) {
     io.stdout(renderJson(report));
