@@ -1,9 +1,13 @@
 /**
  * @luminx/shared — the contract every other package speaks.
  *
- * Contents land in M1: intermediate representation, operations, plan, wire protocol,
- * error codes. See docs/architecture.md §3.1 and §6.
+ * Zero dependencies, no I/O, no logging. It describes what a content model is, what may be
+ * done to one, and how the CLI and the CMS talk about it. See docs/architecture.md §3.1.
  */
 
-/** Bumped whenever the CLI↔CMS wire format changes incompatibly. */
-export const PROTOCOL_VERSION = 1 as const;
+export * from './canonical.js';
+export * from './errors.js';
+export * from './ir.js';
+export * from './plan.js';
+export * from './protocol.js';
+export * from './result.js';

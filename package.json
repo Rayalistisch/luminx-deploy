@@ -15,13 +15,14 @@
     "build": "turbo run build",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -b",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
     "typecheck:clean": "tsc -b --clean",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:purity": "node scripts/check-purity.mjs",
     "check:cycles": "depcruise packages --config .dependency-cruiser.cjs",
-    "ci": "pnpm run check:boundaries && pnpm run check:purity && pnpm run format:check && pnpm run typecheck && pnpm run build && pnpm run check:cycles && pnpm run test"
+    "ci": "pnpm run check:boundaries && pnpm run check:purity && pnpm run format:check && pnpm run typecheck && pnpm run typecheck:tests && pnpm run build && pnpm run check:cycles && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

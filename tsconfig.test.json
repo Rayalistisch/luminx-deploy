@@ -1,0 +1,12 @@
+{
+  "//": "Tests are excluded from every package's build, so `tsc -b` never sees them. Vitest does not typecheck either. Without this file a type error in a test is invisible.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["packages/*/src/**/*.test.ts", "vitest.config.ts"]
+}
