@@ -1,0 +1,8 @@
+dist/
+coverage/
+.turbo/
+pnpm-lock.yaml
+
+# Prose and hand-drawn ASCII diagrams. Prettier also reformats fenced code blocks,
+# which would rewrite the examples the docs are explaining.
+*.md

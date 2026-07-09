@@ -13,8 +13,11 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('../', import.meta.url).pathname;
+// Not `.pathname`: that leaves the path percent-encoded, so any space in a parent
+// directory name becomes %20 and every fs call misses.
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PURE_PACKAGES = ['shared', 'core'];
 
 const FORBIDDEN = /\b(craft|wordpress|statamic|strapi|contentful|sanity|acf|yii|twig)\b/i;
@@ -47,10 +50,22 @@ for (const pkg of PURE_PACKAGES) {
       if (line.includes(IGNORE_MARKER)) return;
       const match = FORBIDDEN.exec(line);
       if (match) {
-        violations.push({ file: relative(ROOT, path), line: index + 1, term: match[0], text: line.trim() });
+        violations.push({
+          file: relative(ROOT, path),
+          line: index + 1,
+          term: match[0],
+          text: line.trim(),
+        });
       }
     });
   }
+}
+
+// `walk` skips a missing directory silently, so an empty scan means the paths are wrong,
+// not that the core is pure. A check that inspects nothing must never report success.
+if (filesScanned === 0) {
+  console.error(`✖ purity: scanned no files in [${PURE_PACKAGES.join(', ')}] — check the paths.`);
+  process.exit(1);
 }
 
 if (violations.length > 0) {
@@ -59,7 +74,9 @@ if (violations.length > 0) {
     console.error(`  ✖ ${file}:${line}  mentions "${term}"`);
     console.error(`      ${text}\n`);
   }
-  console.error('Move this into an adapter, or express it through the IR. See docs/architecture.md §1.3.');
+  console.error(
+    'Move this into an adapter, or express it through the IR. See docs/architecture.md §1.3.',
+  );
   process.exit(1);
 }
 

@@ -19,7 +19,10 @@ module.exports = {
       name: 'no-orphans',
       severity: 'warn',
       comment: 'Module is imported by nothing and imports nothing. Probably dead.',
-      from: { orphan: true, pathNot: ['\\.d\\.ts$', '(^|/)index\\.ts$', '(^|/)vitest\\.config\\.ts$'] },
+      from: {
+        orphan: true,
+        pathNot: ['\\.d\\.ts$', '(^|/)index\\.ts$', '(^|/)vitest\\.config\\.ts$'],
+      },
       to: {},
     },
     {

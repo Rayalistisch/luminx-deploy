@@ -7,8 +7,11 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PACKAGES_DIR = new URL('../packages/', import.meta.url).pathname;
+// Not `.pathname`: that leaves the path percent-encoded, so any space in a parent
+// directory name becomes %20 and every fs call misses.
+const PACKAGES_DIR = fileURLToPath(new URL('../packages/', import.meta.url));
 
 /** Which workspace packages each package is allowed to depend on. */
 const ALLOWED = {
@@ -41,7 +44,9 @@ for (const entry of entries) {
   seen.add(self);
 
   if (!isWorkspacePackage(self)) {
-    violations.push(`${self} (packages/${entry.name}) is not listed in the allow-map in this script.`);
+    violations.push(
+      `${self} (packages/${entry.name}) is not listed in the allow-map in this script.`,
+    );
     continue;
   }
 
@@ -49,7 +54,9 @@ for (const entry of entries) {
 
   for (const dep of declared.filter(isWorkspacePackage)) {
     if (!ALLOWED[self].includes(dep)) {
-      violations.push(`${self} must not depend on ${dep}. Allowed: [${ALLOWED[self].join(', ') || 'none'}]`);
+      violations.push(
+        `${self} must not depend on ${dep}. Allowed: [${ALLOWED[self].join(', ') || 'none'}]`,
+      );
     }
   }
 }
