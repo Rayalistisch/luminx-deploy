@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer worthless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Both lines package.json's `engines` promises. A promise nobody tests is a guess.
+      matrix:
+        node: [22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      # --frozen-lockfile: CI verifies the committed lockfile, it does not update it.
+      - run: pnpm install --frozen-lockfile
+
+      # The same target the developer runs. Boundaries, purity, format, typecheck,
+      # build, cycles, tests — in that order, first failure stops the run.
+      - run: pnpm run ci
