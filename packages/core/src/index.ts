@@ -4,6 +4,13 @@
  * This package must never mention a concrete CMS. Everything CMS-specific reaches it
  * through the CmsAdapter interface. `pnpm check:purity` enforces this.
  *
- * Contents land in M2 (config) and M5 (diff). See docs/architecture.md §3.2.
+ * Diffing, planning and execution land in M5. See docs/architecture.md §3.2.
  */
-export { PROTOCOL_VERSION } from '@luminx/shared';
+
+export { hashOf } from './hash.js';
+export { compile } from './config/compiler.js';
+export type { CompiledModel } from './config/compiler.js';
+export { loadConfig, parseConfig, validateConfig } from './config/loader.js';
+export { pointerOf } from './config/pointer.js';
+export { ConfigSchema } from './config/schema.js';
+export * from './config/types.js';
