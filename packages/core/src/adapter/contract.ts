@@ -73,6 +73,14 @@ export interface CmsAdapter {
     context: AdapterContext,
   ) => Promise<Result<void, LuminxError>>;
 
+  /**
+   * Optional: `undo --list`. Not every CMS can enumerate its snapshots, and a required method
+   * that half the adapters throw from is worse than an optional one they omit.
+   */
+  readonly listSnapshots?: (
+    context: AdapterContext,
+  ) => Promise<Result<readonly SnapshotRef[], LuminxError>>;
+
   /** CMS-specific doctor checks, on top of the generic ones. */
   readonly healthChecks: (context: AdapterContext) => Promise<readonly HealthCheck[]>;
 }

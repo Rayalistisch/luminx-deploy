@@ -234,6 +234,11 @@ const registerField = (
   const spec = specOf(context, body, pointer);
   recordRename(context, 'field', handle, previousHandle, pointer);
 
+  // A matrix cannot be created without its entry types: a CMS may reject an empty one outright.
+  // The edge is acyclic — a matrix nesting its own entry type is LX1008 — so ordering inside
+  // phase 1 supplies them. A dependency, not wiring (§8.3, and the note in phases.ts).
+  const dependsOn = spec.type === 'matrix' ? spec.entryTypes : [];
+
   return register(
     context,
     {
@@ -242,7 +247,7 @@ const registerField = (
       handle,
       name: name ?? humanize(handle),
       spec,
-      dependsOn: [],
+      dependsOn,
       hash: hashOf(spec),
     },
     pointer,

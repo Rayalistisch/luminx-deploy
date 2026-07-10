@@ -170,9 +170,7 @@ describe('compile: one handle, one definition', () => {
 });
 
 describe('compile: references are not dependencies', () => {
-  // §8.3: a matrix references its entry types, which are wired in phase 2. Treating that as a
-  // dependency would make every matrix a cycle.
-  it('does not make a matrix field depend on its entry types', () => {
+  it('makes a matrix field depend on its entry types', () => {
     const { model } = expectOk(
       withSection([
         {
@@ -190,7 +188,8 @@ describe('compile: references are not dependencies', () => {
 
     const matrix = model.resources.get('field:content');
     expect(matrix?.spec).toEqual({ type: 'matrix', entryTypes: ['entryType:hero'] });
-    expect(matrix?.dependsOn).toEqual([]);
+    // A matrix cannot be created with no entry types, so this is a dependency, not wiring.
+    expect(matrix?.dependsOn).toEqual(['entryType:hero']);
     expect(model.resources.has('entryType:hero')).toBe(true);
   });
 

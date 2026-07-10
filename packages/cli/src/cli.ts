@@ -22,6 +22,7 @@ import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
 import { runGenerate } from './commands/generate.js';
 import { runInit } from './commands/init.js';
+import { runUndo } from './commands/undo.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -61,7 +62,6 @@ export const registryFor =
 const RESERVED: Readonly<Record<string, string>> = {
   plan: '`plan` writes the plan as a reviewable artefact. It lands with M12.',
   sync: '`sync` needs drift detection. It lands with M10.',
-  undo: '`undo` needs snapshots. It lands with M8.',
   deploy: '`deploy` is planned for LuminX 1.x. See docs/architecture.md §11.',
 };
 
@@ -73,10 +73,10 @@ Usage
 Commands
   init                 Write a minimal luminx.config.json. Never touches the CMS.
   doctor               Check the environment and the config. Never mutates.
-  generate --dry-run   Show what would change. Writing lands with M8.
+  generate             Bring the CMS up to date. --dry-run to see it first.
+  undo                 Restore the snapshot taken before the last apply.
   sync                 (M10) Reconcile both sides and show drift.
   plan                 (M12) Compute a plan as a reviewable artefact.
-  undo                 (M8)  Restore the last snapshot.
   deploy               (1.x) Apply a reviewed plan to another environment.
 
 Options
@@ -89,6 +89,8 @@ Options
   --json               Machine-readable output on stdout
   --yes, -y            Never prompt. For CI.
   --no-color           Disable colour
+  --list               undo: show the snapshots that exist
+  --id <id>            undo: restore a particular snapshot
   --force              init: overwrite an existing config
   --cms <id>           init: skip the prompt
   --site-name <name>   init: skip the prompt
@@ -108,6 +110,8 @@ export interface ParsedCli {
   readonly yes: boolean;
   readonly color: boolean;
   readonly force: boolean;
+  readonly list: boolean;
+  readonly id: string | undefined;
   readonly cms: string | undefined;
   readonly siteName: string | undefined;
   readonly help: boolean;
@@ -134,6 +138,8 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         yes: { type: 'boolean', short: 'y', default: false },
         'no-color': { type: 'boolean', default: false },
         force: { type: 'boolean', default: false },
+        list: { type: 'boolean', default: false },
+        id: { type: 'string' },
         cms: { type: 'string' },
         'site-name': { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
@@ -168,6 +174,8 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     yes: values.yes ?? false,
     color: !(values['no-color'] ?? false),
     force: values.force ?? false,
+    list: values.list ?? false,
+    id: values.id,
     cms: values.cms,
     siteName: values['site-name'],
     help: values.help ?? false,
@@ -241,6 +249,17 @@ export const runCommand = async (
         configPath,
         root,
         json: parsed.json,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
+
+    case 'undo':
+      return runUndo(io, {
+        configPath,
+        root,
+        json: parsed.json,
+        list: parsed.list,
+        id: parsed.id,
         registryFor: registryFor(parsed.runner, verbose),
         ...(registry === undefined ? {} : { registry }),
       });

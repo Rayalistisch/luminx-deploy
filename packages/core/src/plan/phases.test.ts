@@ -14,26 +14,36 @@ const resource = (partial: Partial<Resource> & Pick<Resource, 'kind' | 'spec'>):
   }) as Resource;
 
 describe('wiringPathsOf', () => {
-  it('knows a matrix wires its entry types', () => {
-    expect(
-      wiringPathsOf(resource({ kind: 'field', spec: { type: 'matrix', entryTypes: [] } })),
-    ).toEqual(['/spec/entryTypes']);
-  });
-
   it('knows a relation field wires its sources', () => {
     expect(
       wiringPathsOf(resource({ kind: 'field', spec: { type: 'entries', sources: [] } })),
     ).toEqual(['/spec/sources']);
+
+    expect(
+      wiringPathsOf(resource({ kind: 'field', spec: { type: 'assets', sources: [] } })),
+    ).toEqual(['/spec/sources']);
   });
 
-  it('knows an entry type wires its field layout', () => {
-    expect(wiringPathsOf(resource({ kind: 'entryType', spec: { fields: [] } }))).toEqual([
-      '/spec/fields',
-    ]);
+  // §8.3 puts these in phase 2, and a CMS may refuse: neither a section without entry types nor a
+  // matrix without them need be a valid thing to save, even for a moment. Both edges are acyclic,
+  // so ordering inside phase 1 handles them — they are dependencies, not wiring.
+  it('says a matrix does not wire its entry types, since one cannot be created without them', () => {
+    expect(
+      wiringPathsOf(resource({ kind: 'field', spec: { type: 'matrix', entryTypes: [] } })),
+    ).toEqual([]);
   });
 
-  // A volume needs its filesystem's UID, but ordering inside phase 1 supplies it. Wiring is
-  // what ordering cannot solve.
+  it('says a section does not wire its entry types, for the same reason', () => {
+    expect(
+      wiringPathsOf(resource({ kind: 'section', spec: { type: 'channel', entryTypes: [] } })),
+    ).toEqual([]);
+  });
+
+  // A field layout names fields that already exist, and nothing points back at the entry type.
+  it('says an entry type does not wire its field layout', () => {
+    expect(wiringPathsOf(resource({ kind: 'entryType', spec: { fields: [] } }))).toEqual([]);
+  });
+
   it('says a volume has no wiring, because dependsOn is not wiring', () => {
     expect(wiringPathsOf(resource({ kind: 'volume', spec: { fs: 'filesystem:local' } }))).toEqual(
       [],
@@ -46,33 +56,37 @@ describe('wiringPathsOf', () => {
 });
 
 describe('hasWiring', () => {
-  it('is true when there is something to wire', () => {
+  it('is true when a relation field has sources', () => {
     expect(
-      hasWiring(
-        resource({ kind: 'entryType', spec: { fields: [{ field: 'field:a', required: false }] } }),
-      ),
+      hasWiring(resource({ kind: 'field', spec: { type: 'entries', sources: ['section:blog'] } })),
     ).toBe(true);
   });
 
   // Otherwise a second `generate` would report a phase-2 operation with nothing in it.
   it('is false when the wiring is empty', () => {
-    expect(hasWiring(resource({ kind: 'entryType', spec: { fields: [] } }))).toBe(false);
-    expect(hasWiring(resource({ kind: 'field', spec: { type: 'matrix', entryTypes: [] } }))).toBe(
+    expect(hasWiring(resource({ kind: 'field', spec: { type: 'entries', sources: [] } }))).toBe(
       false,
     );
+  });
+
+  it('is false for everything ordering can place', () => {
+    expect(hasWiring(resource({ kind: 'entryType', spec: { fields: [] } }))).toBe(false);
+    expect(
+      hasWiring(resource({ kind: 'field', spec: { type: 'matrix', entryTypes: ['entryType:a'] } })),
+    ).toBe(false);
   });
 });
 
 describe('isWiringPath', () => {
-  const entryType = resource({ kind: 'entryType', spec: { fields: [] } });
+  const relation = resource({ kind: 'field', spec: { type: 'entries', sources: [] } });
 
   it('matches the wiring path and anything under it', () => {
-    expect(isWiringPath(entryType, '/spec/fields')).toBe(true);
-    expect(isWiringPath(entryType, '/spec/fields/0/required')).toBe(true);
+    expect(isWiringPath(relation, '/spec/sources')).toBe(true);
+    expect(isWiringPath(relation, '/spec/sources/0')).toBe(true);
   });
 
   it('does not match structure', () => {
-    expect(isWiringPath(entryType, '/name')).toBe(false);
-    expect(isWiringPath(entryType, '/spec/fieldsExtra')).toBe(false);
+    expect(isWiringPath(relation, '/name')).toBe(false);
+    expect(isWiringPath(relation, '/spec/maxRelations')).toBe(false);
   });
 });

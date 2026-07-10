@@ -9,7 +9,15 @@
  * Naming no CMS, it is allowed to live in `core`.
  */
 
-import { FIELD_TYPES, RESOURCE_KINDS, PROTOCOL_VERSION, ok } from '@luminx/shared';
+import {
+  ErrorCode,
+  FIELD_TYPES,
+  PROTOCOL_VERSION,
+  RESOURCE_KINDS,
+  err,
+  luminxError,
+  ok,
+} from '@luminx/shared';
 import type { CurrentModel, CurrentResource, LogicalId, Resource } from '@luminx/shared';
 
 import type { Capabilities, CmsAdapter } from './contract.js';
@@ -35,6 +43,8 @@ export const createMemoryAdapter = (options: MemoryAdapterOptions = {}): CmsAdap
   const store = new Map<LogicalId, CurrentResource>(
     (options.initial ?? []).map((entry) => [entry.resource.logicalId, entry]),
   );
+
+  const snapshots = new Map<string, Map<LogicalId, CurrentResource>>();
 
   const model = (): CurrentModel => ({ resources: new Map(store) });
 
@@ -80,8 +90,37 @@ export const createMemoryAdapter = (options: MemoryAdapterOptions = {}): CmsAdap
       }
     },
 
-    snapshot: () => Promise.resolve(ok({ id: 'memory', createdAt: '', planHash: '' })),
-    restore: () => Promise.resolve(ok(undefined)),
+    // A real snapshot: the store is copied, and restore puts the copy back. A memory adapter
+    // whose undo did nothing would let the executor's tests pass without testing anything.
+    snapshot: () => {
+      const id = `mem-${snapshots.size + 1}`;
+      snapshots.set(id, new Map(store));
+      return Promise.resolve(ok({ id, createdAt: '1970-01-01T00:00:00.000Z', planHash: '' }));
+    },
+
+    restore: (ref) => {
+      const taken = snapshots.get(ref.id);
+      if (taken === undefined) {
+        return Promise.resolve(
+          err(luminxError(ErrorCode.ApplyRestoreFailed, `no snapshot ${ref.id}`)),
+        );
+      }
+      store.clear();
+      for (const [id, entry] of taken) store.set(id, entry);
+      return Promise.resolve(ok(undefined));
+    },
+
+    listSnapshots: () =>
+      Promise.resolve(
+        ok(
+          [...snapshots.keys()].map((id) => ({
+            id,
+            createdAt: '1970-01-01T00:00:00.000Z',
+            planHash: '',
+          })),
+        ),
+      ),
+
     healthChecks: () => Promise.resolve([]),
   };
 };

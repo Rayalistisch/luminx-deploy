@@ -54,37 +54,45 @@ const simple = compiled({
 });
 
 describe('diff: creating from nothing', () => {
-  it('creates every resource, dependencies first', () => {
+  // Everything ordering can place is created whole, in one phase. A CMS may have no other option:
+  // a section without entry types can be invalid, and so can a matrix without them.
+  it('creates every resource in dependency order, in one phase', () => {
     expect(describeOps(planOf(simple, empty))).toEqual([
       'create:1 field:title',
       'create:1 entryType:page',
       'create:1 section:pages',
-      'create:2 entryType:page',
-      'create:2 section:pages',
     ]);
   });
 
-  // §8.3: structure first, wiring once every UID exists.
-  it('gives a phase-2 operation only to resources that have something to wire', () => {
+  it('gives no phase-2 operation to a model with no relation fields', () => {
     const plan = planOf(simple, empty);
-    const phase2 = plan.operations.filter((op) => 'phase' in op && op.phase === 2);
-    expect(phase2.map((op) => op.resource.logicalId)).toEqual(['entryType:page', 'section:pages']);
+    expect(plan.operations.filter((op) => 'phase' in op && op.phase === 2)).toEqual([]);
   });
 
-  it('does not wire an entry type that has no fields', () => {
+  // The only thing ordering cannot place: Pages points at Blog, Blog points back at Pages.
+  it('wires a relation field in phase 2, after both sections exist', () => {
     const model = compiled({
       version: 1,
       cms: 'memory',
       sections: [
-        { handle: 'pages', type: 'channel', entryTypes: [{ handle: 'page', fields: [] }] },
+        {
+          handle: 'pages',
+          type: 'channel',
+          entryTypes: [
+            { handle: 'page', fields: [{ handle: 'related', type: 'entries', sources: ['blog'] }] },
+          ],
+        },
+        { handle: 'blog', type: 'channel', entryTypes: [{ handle: 'post', fields: [] }] },
       ],
     });
 
-    expect(describeOps(planOf(model, empty))).toEqual([
-      'create:1 entryType:page',
-      'create:1 section:pages',
-      'create:2 section:pages',
+    const phases = describeOps(planOf(model, empty));
+    expect(phases.filter((line) => line.startsWith('create:2'))).toEqual([
+      'create:2 field:related',
     ]);
+    expect(phases.indexOf('create:1 field:related')).toBeLessThan(
+      phases.indexOf('create:2 field:related'),
+    );
   });
 });
 
@@ -131,30 +139,45 @@ describe('diff: updating', () => {
   });
 
   it('updates wiring in phase 2', () => {
+    const withSources = (sources: string[]) =>
+      compiled({
+        version: 1,
+        cms: 'memory',
+        sections: [
+          {
+            handle: 'pages',
+            type: 'channel',
+            entryTypes: [
+              {
+                handle: 'page',
+                fields: sources.length === 0 ? [] : [{ handle: 'rel', type: 'entries', sources }],
+              },
+            ],
+          },
+          { handle: 'blog', type: 'channel', entryTypes: [{ handle: 'post', fields: [] }] },
+        ],
+      });
+
     const before = compiled({
-      version: 1,
-      cms: 'memory',
-      sections: [
-        { handle: 'pages', type: 'channel', entryTypes: [{ handle: 'page', fields: [] }] },
-      ],
-    });
-    const after = compiled({
       version: 1,
       cms: 'memory',
       sections: [
         {
           handle: 'pages',
           type: 'channel',
-          entryTypes: [{ handle: 'page', fields: [{ handle: 'title', type: 'text' }] }],
+          entryTypes: [
+            { handle: 'page', fields: [{ handle: 'rel', type: 'entries', sources: ['pages'] }] },
+          ],
         },
+        { handle: 'blog', type: 'channel', entryTypes: [{ handle: 'post', fields: [] }] },
       ],
     });
 
-    const plan = planOf(after, currentModelOf(resourcesOf(before)));
+    const plan = planOf(withSources(['blog']), currentModelOf(resourcesOf(before)));
     const wiring = plan.operations.find((op) => op.kind === 'update' && op.phase === 2);
 
-    expect(wiring?.resource.logicalId).toBe('entryType:page');
-    expect(wiring?.kind === 'update' && wiring.changes[0]?.path).toBe('/spec/fields');
+    expect(wiring?.resource.logicalId).toBe('field:rel');
+    expect(wiring?.kind === 'update' && wiring.changes[0]?.path).toBe('/spec/sources');
   });
 });
 

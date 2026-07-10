@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+
 import { hashOf } from '@luminx/core';
 import type { ProjectFacts } from '@luminx/shared';
 import { describe, expect, it } from 'vitest';
@@ -7,7 +9,7 @@ import type { Runner } from './runner.js';
 import { toCurrentModel } from './translate.js';
 
 const facts = (installed: Record<string, string> = {}): ProjectFacts => ({
-  root: '/project',
+  root: tmpdir(),
   composer: {
     name: 'acme/site',
     phpConstraint: '^8.3',
@@ -21,17 +23,18 @@ const facts = (installed: Record<string, string> = {}): ProjectFacts => ({
   envKeys: null,
 });
 
-const silentRunner: Runner = {
+/** Answers as a machine with no plugin does: non-zero, at once, with nothing written. */
+const failingRunner: Runner = {
   id: 'local',
   describe: (args) => `php craft ${args.join(' ')}`,
-  exec: () => Promise.resolve({ code: 0, stdout: '', stderr: '' }),
+  exec: () => Promise.resolve({ code: 1, stdout: '', stderr: 'Unknown command: luminx' }),
 };
 
 const adapterFor = (installed: Record<string, string> = {}) =>
-  createCraftAdapter({ runner: silentRunner, facts: facts(installed) });
+  createCraftAdapter({ runner: failingRunner, facts: facts(installed) });
 
 const context = (installed: Record<string, string> = {}) => ({
-  root: '/project',
+  root: tmpdir(),
   facts: facts(installed),
 });
 
@@ -85,20 +88,21 @@ describe('detect', () => {
   });
 });
 
-describe('apply, snapshot, restore', () => {
-  // Exiting 0 having written nothing would be a lie a pipeline believes.
-  it('refuse, naming the milestone that brings them', async () => {
+describe('apply and snapshot', () => {
+  // The runner answers nothing, so every call fails at the transport. What matters here is that
+  // the adapter asks at all, and reports the failure rather than pretending to have written.
+  it('report a transport failure rather than claiming success', async () => {
     const adapter = adapterFor();
-    const applyContext = { ...context(), resolved: new Map() };
 
+    const resource = { logicalId: 'field:a' } as never;
     const applied = await adapter.apply(
-      { kind: 'skip', resource: {} as never, reason: 'unchanged' },
-      applyContext,
+      { kind: 'skip', resource, reason: 'unchanged' },
+      { ...context(), resolved: new Map() },
     );
-    expect(!applied.ok && applied.error.message).toContain('M8');
+    expect(applied.ok).toBe(false);
 
     const snapshot = await adapter.snapshot(context());
-    expect(!snapshot.ok && snapshot.error.message).toContain('M8');
+    expect(snapshot.ok).toBe(false);
   });
 });
 

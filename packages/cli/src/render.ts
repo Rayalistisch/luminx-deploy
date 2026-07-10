@@ -143,10 +143,16 @@ export const renderPlan = (color: boolean, plan: Plan): string => {
   for (const line of collapsed) counts[line.kind]++;
 
   const operations = summarize(plan).total;
+
+  // Most models need no second phase at all: only a relation field's sources are wired late.
+  // Saying "across two phases" when there is one would describe work that is not there.
+  const phased = plan.operations.some((operation) => 'phase' in operation && operation.phase === 2);
+  const detail = `${operations} operations${phased ? ' across two phases' : ''}`;
+
   const summary =
     `\n  ${collapsed.length} resources   ${counts.create} create   ${counts.update} update   ` +
     `${counts.skip} skip   ${counts.delete} delete\n` +
-    `  ${paint(color, 'dim', `${operations} operations across two phases`)}\n`;
+    `  ${paint(color, 'dim', detail)}\n`;
 
   // Orphans are reported, never acted on. Saying nothing would let a section quietly rot.
   const orphans =

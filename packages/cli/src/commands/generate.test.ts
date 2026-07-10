@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -66,13 +66,53 @@ const alreadyApplied = () => {
 };
 
 describe('generate', () => {
-  // Apply lands with M8. Exiting 0 having written nothing would be a lie a pipeline believes.
-  it('refuses to run without --dry-run', async () => {
-    const io = fakeIo();
-    const code = await runCommand(parseCli(['generate']), io, await project());
+  // §8.2: silence never writes.
+  it('writes nothing when the confirmation is declined', async () => {
+    const io = { ...fakeIo(), confirm: () => Promise.resolve(false) };
+    const registry = createRegistry([createMemoryAdapter()]);
 
-    expect(code).toBe(ExitCode.ApplyFailed);
-    expect(io.err()).toContain('lands with M8');
+    const code = await runCommand(parseCli(['generate']), io, await project(), registry);
+
+    expect(code).toBe(ExitCode.Success);
+    expect(io.out()).toContain('Cancelled');
+  });
+
+  it('applies the plan, then reports nothing left to do', async () => {
+    const registry = createRegistry([createMemoryAdapter()]);
+    const root = await project();
+
+    const first = fakeIo();
+    expect(await runCommand(parseCli(['generate', '--yes']), first, root, registry)).toBe(
+      ExitCode.Success,
+    );
+    expect(first.out()).toContain('Applied 3 operations');
+
+    // The idempotency test of §13, end to end through the CLI: a second run writes nothing.
+    const second = fakeIo();
+    expect(await runCommand(parseCli(['generate', '--yes']), second, root, registry)).toBe(
+      ExitCode.Success,
+    );
+    expect(second.out()).toContain('3 skip');
+    expect(second.out()).toContain('Nothing to do');
+  });
+
+  it('writes a lockfile the next run can read', async () => {
+    const registry = createRegistry([createMemoryAdapter()]);
+    const root = await project();
+
+    await runCommand(parseCli(['generate', '--yes']), fakeIo(), root, registry);
+
+    const lockfile = JSON.parse(await readFile(join(root, 'luminx.lock.json'), 'utf8')) as {
+      cms: string;
+      resources: Record<string, { uid: string; hash: string }>;
+    };
+
+    expect(lockfile.cms).toBe('memory');
+    expect(Object.keys(lockfile.resources).sort()).toEqual([
+      'entryType:page',
+      'field:title',
+      'section:pages',
+    ]);
   });
 
   it('plans every resource against an empty CMS', async () => {
@@ -83,8 +123,9 @@ describe('generate', () => {
     expect(io.out()).toContain('3 resources   3 create');
   });
 
-  // Phases are how the plan is executed, not what it does. The preview says each resource once.
-  it('shows a resource once, however many phases it takes', async () => {
+  // Phases are how the plan is executed, not what it does. The preview says each resource once,
+  // and mentions a second phase only when there is one — most models have none.
+  it('shows a resource once, and names no phase that is not there', async () => {
     const io = fakeIo();
     await runCommand(parseCli(['generate', '--dry-run']), io, await project());
 
@@ -93,7 +134,8 @@ describe('generate', () => {
       .split('\n')
       .filter((line) => line.includes('section'));
     expect(sectionLines).toHaveLength(1);
-    expect(io.out()).toContain('5 operations across two phases');
+    expect(io.out()).toContain('3 operations');
+    expect(io.out()).not.toContain('two phases');
   });
 
   // The most important behaviour in the project (§13). Against a CMS that already matches,

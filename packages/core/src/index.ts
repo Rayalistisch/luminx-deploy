@@ -4,7 +4,7 @@
  * This package must never mention a concrete CMS. Everything CMS-specific reaches it
  * through the CmsAdapter interface. `pnpm check:purity` enforces this.
  *
- * The executor — applying a plan — lands in M8. See docs/architecture.md §3.2.
+ * See docs/architecture.md §3.2.
  */
 
 export { hashOf } from './hash.js';
@@ -32,6 +32,8 @@ export { diffValues } from './diff/changes.js';
 export { diff } from './diff/differ.js';
 export type { DiffInput } from './diff/differ.js';
 
+export { execute } from './plan/executor.js';
+export type { ExecuteInput, ExecutionReport } from './plan/executor.js';
 export { topologicalOrder } from './plan/orderer.js';
 export { hasWiring, isWiringPath, wiringPathsOf } from './plan/phases.js';
 

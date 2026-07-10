@@ -80,15 +80,12 @@ describe('runCommand', () => {
   });
 
   // A pipeline calling a command that does not exist yet must never read success.
-  it.each(['generate', 'sync', 'plan', 'undo', 'deploy'])(
-    'reserves `%s` and exits non-zero',
-    async (command) => {
-      const io = fakeIo();
-      const code = await runCommand(parseCli([command]), io, '/');
-      expect(code).not.toBe(ExitCode.Success);
-      expect(io.err()).toMatch(/lands with M\d+|planned for LuminX/);
-    },
-  );
+  it.each(['sync', 'plan', 'deploy'])('reserves `%s` and exits non-zero', async (command) => {
+    const io = fakeIo();
+    const code = await runCommand(parseCli([command]), io, '/');
+    expect(code).not.toBe(ExitCode.Success);
+    expect(io.err()).toMatch(/lands with M\d+|planned for LuminX/);
+  });
 });
 
 describe('init', () => {

@@ -7,7 +7,17 @@
 
 import { PROTOCOL_VERSION, ErrorCode, err, luminxError, ok } from '@luminx/shared';
 import type { AdapterContext, Capabilities, CmsAdapter, CmsInfo } from '@luminx/core';
-import type { CurrentModel, HealthCheck, LuminxError, ProjectFacts, Result } from '@luminx/shared';
+import type {
+  CurrentModel,
+  HealthCheck,
+  LogicalId,
+  LuminxError,
+  Operation,
+  OperationResult,
+  ProjectFacts,
+  Result,
+  SnapshotRef,
+} from '@luminx/shared';
 
 import { createProtocolClient } from './protocol.js';
 import type { Runner } from './runner.js';
@@ -77,10 +87,32 @@ export const capabilitiesFor = (facts: ProjectFacts): Capabilities => {
   };
 };
 
-const notYet = (what: string): LuminxError =>
-  luminxError(ErrorCode.ApplyOperationFailed, `${what} lands with M8.`, {
-    hint: 'Until then, `luminx generate --dry-run` shows what would change.',
-  });
+/**
+ * The plugin applies a *list* of operations; the contract hands them over one at a time. Each
+ * call is a fresh Craft bootstrap, and under DDEV also a wait for the volume to sync, so a plan
+ * of eleven resources costs eleven of them.
+ *
+ * That is slow and it is correct. Batching would mean the adapter deciding which operations to
+ * run together, and an adapter that decides anything breaks the promise `--dry-run` makes (§7.2).
+ * If it needs fixing, it is the contract that changes, not this file.
+ */
+const singleOperation = (operation: Operation, resolved: ReadonlyMap<LogicalId, string>) => ({
+  operations: [operation],
+  resolved: Object.fromEntries(resolved),
+});
+
+const asSnapshotRef = (data: unknown): SnapshotRef | null => {
+  if (typeof data !== 'object' || data === null) return null;
+  const candidate = data as Record<string, unknown>;
+
+  return typeof candidate['id'] === 'string'
+    ? {
+        id: candidate['id'],
+        createdAt: typeof candidate['createdAt'] === 'string' ? candidate['createdAt'] : '',
+        planHash: typeof candidate['planHash'] === 'string' ? candidate['planHash'] : '',
+      }
+    : null;
+};
 
 export interface CraftAdapterOptions {
   readonly runner: Runner;
@@ -153,9 +185,58 @@ export const createCraftAdapter = (options: CraftAdapterOptions): CmsAdapter => 
       return response.ok ? toCurrentModel(response.value.data) : response;
     },
 
-    apply: () => Promise.resolve(err(notYet('Applying an operation'))),
-    snapshot: () => Promise.resolve(err(notYet('Snapshots'))),
-    restore: () => Promise.resolve(err(notYet('Restoring a snapshot'))),
+    apply: async (operation, context) => {
+      const response = await client(context).call(
+        'luminx/apply',
+        singleOperation(operation, context.resolved),
+      );
+
+      if (!response.ok) return response;
+
+      const results = (response.value.data as { results?: unknown })?.results;
+      const first = Array.isArray(results)
+        ? (results[0] as OperationResult | undefined)
+        : undefined;
+
+      return first === undefined
+        ? err(
+            luminxError(
+              ErrorCode.InternalInvariantViolated,
+              `The plugin applied ${operation.resource.logicalId} but reported no result`,
+            ),
+          )
+        : ok(first);
+    },
+
+    snapshot: async (context) => {
+      const response = await client(context).call('luminx/snapshot', { action: 'create' });
+      if (!response.ok) return response;
+
+      const ref = asSnapshotRef(response.value.data);
+
+      return ref === null
+        ? err(luminxError(ErrorCode.ApplySnapshotFailed, 'The plugin returned no snapshot id'))
+        : ok(ref);
+    },
+
+    restore: async (ref, context) => {
+      const response = await client(context).call('luminx/snapshot', {
+        action: 'restore',
+        id: ref.id,
+      });
+
+      return response.ok ? ok(undefined) : response;
+    },
+
+    listSnapshots: async (context) => {
+      const response = await client(context).call('luminx/snapshot', { action: 'list' });
+      if (!response.ok) return response;
+
+      const raw = (response.value.data as { snapshots?: unknown })?.snapshots;
+      const list = Array.isArray(raw) ? raw.map(asSnapshotRef) : [];
+
+      return ok(list.filter((ref): ref is SnapshotRef => ref !== null));
+    },
 
     healthChecks: async (context): Promise<readonly HealthCheck[]> => {
       const { facts } = context;
