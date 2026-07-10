@@ -67,6 +67,38 @@ describe('checkCapabilities', () => {
     const { capabilities } = createMemoryAdapter();
     expect(checkCapabilities(modelOf([field('money')]), capabilities, 'memory').ok).toBe(true);
   });
+
+  // §7.1: a field named something the CMS reserves fails at validation with a pointer, not
+  // halfway through an apply. (The real reserved list lives in the adapter; core only enforces.)
+  it('rejects a field whose handle the CMS reserves', () => {
+    const reserved = {
+      ...field('text'),
+      handle: 'lockedName',
+      logicalId: 'field:lockedName',
+    } as Resource;
+    const capabilities = {
+      fieldTypes: ['text'] as const,
+      resourceKinds: ['field'] as const,
+      reservedFieldHandles: ['lockedName', 'other'],
+    };
+
+    const result = checkCapabilities(modelOf([reserved]), capabilities, 'elsewhere');
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error[0]?.code).toBe('LX1011');
+    expect(!result.ok && result.error[0]?.logicalId).toBe('field:lockedName');
+  });
+
+  it('reserves nothing when the adapter lists nothing', () => {
+    const capabilities = { fieldTypes: ['text'] as const, resourceKinds: ['field'] as const };
+    const named = {
+      ...field('text'),
+      handle: 'lockedName',
+      logicalId: 'field:lockedName',
+    } as Resource;
+
+    expect(checkCapabilities(modelOf([named]), capabilities, 'elsewhere').ok).toBe(true);
+  });
 });
 
 describe('createMemoryAdapter', () => {

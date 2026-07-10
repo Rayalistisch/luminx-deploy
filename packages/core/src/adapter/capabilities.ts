@@ -18,9 +18,24 @@ export const checkCapabilities = (
 ): Result<void, readonly LuminxError[]> => {
   const kinds = new Set<string>(capabilities.resourceKinds);
   const fieldTypes = new Set<string>(capabilities.fieldTypes);
+  const reserved = new Set<string>(capabilities.reservedFieldHandles ?? []);
   const errors: LuminxError[] = [];
 
   for (const resource of model.resources.values()) {
+    if (resource.kind === 'field' && reserved.has(resource.handle)) {
+      errors.push(
+        luminxError(
+          ErrorCode.ConfigReservedHandle,
+          `"${adapterId}" reserves the field handle "${resource.handle}"`,
+          {
+            logicalId: resource.logicalId,
+            hint: 'Rename the field to something the CMS does not use.',
+          },
+        ),
+      );
+      continue;
+    }
+
     if (!kinds.has(resource.kind)) {
       errors.push(
         luminxError(

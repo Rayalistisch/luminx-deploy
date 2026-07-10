@@ -38,12 +38,104 @@ const installed = (facts: ProjectFacts, packageName: string): string | null =>
   facts.composer?.installed[packageName] ?? null;
 
 /**
+ * Handles Craft keeps for itself, from `craft\\base\\Field::RESERVED_HANDLES`. A field named any
+ * of these fails Craft's own validation mid-save; caught here, it fails before the plan with a
+ * pointer instead (§7.1). The adapter is allowed to know Craft, so the list lives here — it is
+ * duplicated knowledge, but a stale entry only means falling back to Craft's own mid-apply error,
+ * which is safe.
+ */
+const RESERVED_FIELD_HANDLES: readonly string[] = [
+  'ancestors',
+  'applyingDraft',
+  'archived',
+  'attributeLabel',
+  'attributes',
+  'awaitingFieldValues',
+  'behavior',
+  'behaviors',
+  'canSetProperties',
+  'canonical',
+  'children',
+  'contentTable',
+  'dateCreated',
+  'dateDeleted',
+  'dateLastMerged',
+  'dateUpdated',
+  'descendants',
+  'draftId',
+  'duplicateOf',
+  'enabled',
+  'enabledForSite',
+  'error',
+  'errorSummary',
+  'errors',
+  'fieldLayoutId',
+  'fieldValue',
+  'fieldValues',
+  'firstSave',
+  'hardDelete',
+  'hasMethods',
+  'icon',
+  'id',
+  'isNewForSite',
+  'isProvisionalDraft',
+  'language',
+  'level',
+  'lft',
+  'link',
+  'localized',
+  'mergingCanonicalChanges',
+  'newSiteIds',
+  'next',
+  'nextSibling',
+  'owner',
+  'parent',
+  'parents',
+  'prev',
+  'prevSibling',
+  'previewing',
+  'propagateAll',
+  'propagateRequired',
+  'propagating',
+  'ref',
+  'relatedToAssets',
+  'relatedToCategories',
+  'relatedToEntries',
+  'relatedToTags',
+  'relatedToUsers',
+  'resaving',
+  'revisionId',
+  'rgt',
+  'root',
+  'scenario',
+  'searchKeywords',
+  'searchScore',
+  'siblings',
+  'site',
+  'siteId',
+  'siteSettingsId',
+  'slug',
+  'sortOrder',
+  'status',
+  'structureId',
+  'tempId',
+  'title',
+  'trashed',
+  'uid',
+  'updatingFromDerivative',
+  'uri',
+  'url',
+  'viewMode',
+  'where',
+];
+
+/**
  * What this adapter can express, given what is actually installed.
  *
- * Capabilities are computed from the project rather than hard-coded, because two of them depend
- * on plugins. Checked before a plan exists (§7.1), so a config asking for `richtext` in a project
- * without CKEditor is a validation error with a pointer — not a crash halfway through an apply,
- * with half a content model in the database.
+ * Computed from the project rather than hard-coded, because two of these depend on plugins.
+ * Checked before a plan exists (§7.1): a config asking for `richtext` without CKEditor, or a
+ * field named `title`, is a validation error with a pointer — not a crash halfway through an
+ * apply with half a content model written.
  */
 export const capabilitiesFor = (facts: ProjectFacts): Capabilities => {
   const fieldTypes = [
@@ -84,6 +176,7 @@ export const capabilitiesFor = (facts: ProjectFacts): Capabilities => {
       installed(facts, NAVIGATION_PACKAGE) === null
         ? resourceKinds
         : [...resourceKinds, 'navigation'],
+    reservedFieldHandles: RESERVED_FIELD_HANDLES,
   };
 };
 

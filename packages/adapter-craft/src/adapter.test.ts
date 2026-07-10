@@ -59,6 +59,16 @@ describe('capabilitiesFor', () => {
   it('always offers the raw escape hatch', () => {
     expect(capabilitiesFor(facts()).fieldTypes).toContain('raw');
   });
+
+  // The handles Craft rejects mid-save. Listing them lets the check fire before the plan (§7.1).
+  it('reserves the field handles Craft keeps for itself', () => {
+    const reserved = capabilitiesFor(facts()).reservedFieldHandles ?? [];
+
+    expect(reserved).toContain('title');
+    expect(reserved).toContain('id');
+    expect(reserved).toContain('uid');
+    expect(reserved).not.toContain('heading');
+  });
 });
 
 describe('detect', () => {

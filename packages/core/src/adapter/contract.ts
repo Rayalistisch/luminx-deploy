@@ -27,6 +27,12 @@ import type {
 export interface Capabilities {
   readonly fieldTypes: readonly FieldType[];
   readonly resourceKinds: readonly ResourceKind[];
+  /**
+   * Handles the CMS keeps for itself, so a field named `title` or `id` fails at validation with a
+   * pointer rather than halfway through an apply with half a layout written. The adapter owns the
+   * list; an empty one means the CMS reserves nothing.
+   */
+  readonly reservedFieldHandles?: readonly string[];
 }
 
 export interface CmsInfo {

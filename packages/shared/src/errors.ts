@@ -21,6 +21,8 @@ export const ErrorCode = {
   /** `previousHandle` names a resource the lockfile has never seen (§5.2). */
   ConfigUnknownPreviousHandle: 'LX1009',
   ConfigConflictingFieldDefinition: 'LX1010',
+  /** A handle the target CMS reserves for itself (§7.1). Caught before the plan, not mid-apply. */
+  ConfigReservedHandle: 'LX1011',
 
   // 2xxx — the environment is wrong. The config may be fine; the machine is not.
   EnvRunnerNotFound: 'LX2001',
