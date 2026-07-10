@@ -11,6 +11,10 @@ luminx.local.json
 # PHP
 vendor/
 
+# craft-luminx is a library: the projects that install it decide which versions they get.
+# Pinning ours would tell them nothing and go stale.
+packages/craft-plugin/composer.lock
+
 # OS / editor
 .DS_Store
 .idea/

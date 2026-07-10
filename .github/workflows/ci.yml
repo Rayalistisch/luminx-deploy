@@ -38,3 +38,32 @@ jobs:
       # The same target the developer runs. Boundaries, purity, format, typecheck,
       # build, cycles, tests — in that order, first failure stops the run.
       - run: pnpm run ci
+
+  php:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # composer.json's `php` constraint. Craft 5 supports both, and 8.5 is not one of them:
+      # it emits deprecation notices from inside Craft itself.
+      matrix:
+        php: ['8.3', '8.4']
+
+    defaults:
+      run:
+        working-directory: packages/craft-plugin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: intl, mbstring, dom, pdo
+          coverage: none
+
+      # No --frozen-lockfile: craft-luminx is a library and commits no lock file, so CI must
+      # resolve fresh. That is also the point — it catches a dependency that broke us.
+      - run: composer install --no-interaction --no-progress
+
+      # Nothing here boots Craft. The gateway seam is what makes that possible.
+      - run: ./vendor/bin/pest
