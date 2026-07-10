@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pest needs this. Without it, PHPUnit has no test suite to run and no cache directory to
+  write, and on some PHP versions it misreads its own cache-directory flag as an XML path and
+  exits 2, which is exactly how CI failed while a differently resolved local install passed.
+  A committed config is the difference between "works on my machine" and "works".
+-->
+<phpunit
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+  bootstrap="vendor/autoload.php"
+  cacheDirectory=".phpunit.cache"
+  colors="true"
+  failOnWarning="true"
+  failOnDeprecation="true"
+>
+  <testsuites>
+    <testsuite name="craft-luminx">
+      <directory>tests</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>
