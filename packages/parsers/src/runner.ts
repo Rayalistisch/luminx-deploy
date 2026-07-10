@@ -6,9 +6,8 @@
  * `--runner`. Mixing them would hide the choice inside the observation.
  */
 
-export const RUNNERS = ['ddev', 'lando', 'docker', 'local'] as const;
-
-export type RunnerId = (typeof RUNNERS)[number];
+import { RUNNERS } from '@luminx/shared';
+import type { RunnerId } from '@luminx/shared';
 
 /**
  * Marker files, in the order a runner takes precedence. A project with both `.ddev/config.yaml`

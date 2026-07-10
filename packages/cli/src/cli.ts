@@ -10,16 +10,27 @@ import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { createMemoryAdapter, createRegistry } from '@luminx/core';
+import type { AdapterRegistry } from '@luminx/core';
+
 import { ExitCode } from './exit.js';
 import type { Io } from './io.js';
 import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
+import { runGenerate } from './commands/generate.js';
 import { runInit } from './commands/init.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
 
 const DEFAULT_CONFIG = 'luminx.config.json';
+const DEFAULT_LOCKFILE = 'luminx.lock.json';
+
+/**
+ * The composition root registers adapters, and nothing else may (§4). The memory adapter ships
+ * so `generate --dry-run` works out of the box, with no CMS; the Craft adapter lands with M7.
+ */
+export const defaultRegistry = (): AdapterRegistry => createRegistry([createMemoryAdapter()]);
 
 /**
  * Names that exist so nobody else takes them, and so `luminx generate` says something better
@@ -27,8 +38,7 @@ const DEFAULT_CONFIG = 'luminx.config.json';
  * pipeline calling `deploy` must never conclude that it deployed.
  */
 const RESERVED: Readonly<Record<string, string>> = {
-  plan: '`plan` needs the differ. It lands with M12. See docs/architecture.md §8.4.',
-  generate: '`generate` needs the differ and an adapter. It lands with M5.',
+  plan: '`plan` writes the plan as a reviewable artefact. It lands with M12.',
   sync: '`sync` needs drift detection. It lands with M10.',
   undo: '`undo` needs snapshots. It lands with M8.',
   deploy: '`deploy` is planned for LuminX 1.x. See docs/architecture.md §11.',
@@ -42,7 +52,7 @@ Usage
 Commands
   init                 Write a minimal luminx.config.json. Never touches the CMS.
   doctor               Check the environment and the config. Never mutates.
-  generate             (M5)  Bring the CMS up to date with the config.
+  generate --dry-run   Show what would change. Writing lands with M8.
   sync                 (M10) Reconcile both sides and show drift.
   plan                 (M12) Compute a plan as a reviewable artefact.
   undo                 (M8)  Restore the last snapshot.
@@ -50,7 +60,9 @@ Commands
 
 Options
   --config <path>      Path to luminx.config.json (default: ./${DEFAULT_CONFIG})
+  --lockfile <path>    Path to luminx.lock.json (default: ./${DEFAULT_LOCKFILE})
   --cwd <path>         Project root (default: the working directory)
+  --dry-run            Compute the plan and write nothing
   --json               Machine-readable output on stdout
   --yes, -y            Never prompt. For CI.
   --no-color           Disable colour
@@ -64,7 +76,9 @@ Options
 export interface ParsedCli {
   readonly command: string | undefined;
   readonly config: string | undefined;
+  readonly lockfile: string | undefined;
   readonly cwd: string | undefined;
+  readonly dryRun: boolean;
   readonly json: boolean;
   readonly yes: boolean;
   readonly color: boolean;
@@ -86,7 +100,9 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
       strict: true,
       options: {
         config: { type: 'string' },
+        lockfile: { type: 'string' },
         cwd: { type: 'string' },
+        'dry-run': { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         'no-color': { type: 'boolean', default: false },
@@ -110,7 +126,9 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
   return {
     command: positionals[0],
     config: values.config,
+    lockfile: values.lockfile,
     cwd: values.cwd,
+    dryRun: values['dry-run'] ?? false,
     json: values.json ?? false,
     yes: values.yes ?? false,
     color: !(values['no-color'] ?? false),
@@ -123,13 +141,26 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
 };
 
 /** The project root and the config path are separate: `--config` may point outside the project. */
-const locate = (parsed: ParsedCli, cwd: string): { root: string; configPath: string } => {
+const locate = (
+  parsed: ParsedCli,
+  cwd: string,
+): { root: string; configPath: string; lockfilePath: string } => {
   const root = parsed.cwd === undefined ? cwd : resolve(cwd, parsed.cwd);
-  const config = parsed.config ?? DEFAULT_CONFIG;
-  return { root, configPath: isAbsolute(config) ? config : resolve(root, config) };
+  const under = (path: string) => (isAbsolute(path) ? path : resolve(root, path));
+
+  return {
+    root,
+    configPath: under(parsed.config ?? DEFAULT_CONFIG),
+    lockfilePath: under(parsed.lockfile ?? DEFAULT_LOCKFILE),
+  };
 };
 
-export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promise<ExitCode> => {
+export const runCommand = async (
+  parsed: ParsedCli,
+  io: Io,
+  cwd: string,
+  registry: AdapterRegistry = defaultRegistry(),
+): Promise<ExitCode> => {
   if (parsed.version) {
     io.stdout(`${version}\n`);
     return ExitCode.Success;
@@ -153,7 +184,7 @@ export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promis
     return ExitCode.ConfigError;
   }
 
-  const { root, configPath } = locate(parsed, cwd);
+  const { root, configPath, lockfilePath } = locate(parsed, cwd);
 
   switch (parsed.command) {
     case 'init':
@@ -166,6 +197,16 @@ export const runCommand = async (parsed: ParsedCli, io: Io, cwd: string): Promis
 
     case 'doctor':
       return runDoctor(io, { configPath, root, json: parsed.json });
+
+    case 'generate':
+      return runGenerate(io, {
+        configPath,
+        lockfilePath,
+        root,
+        json: parsed.json,
+        dryRun: parsed.dryRun,
+        registry,
+      });
 
     default:
       throw new UsageError(`Unknown command: ${parsed.command}`);

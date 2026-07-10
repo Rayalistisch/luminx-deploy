@@ -190,6 +190,18 @@ export type Resource =
 
 export type ResourceSpec = Resource['spec'];
 
+/** What the config asks for. Has no UIDs: those exist only once a CMS has created something. */
 export interface ContentModel {
   readonly resources: ReadonlyMap<LogicalId, Resource>;
+}
+
+/** A resource as the CMS reports it: the IR shape, plus the UID the CMS assigned it. */
+export interface CurrentResource {
+  readonly resource: Resource;
+  readonly uid: string;
+}
+
+/** What the CMS actually has. The other half of every diff. */
+export interface CurrentModel {
+  readonly resources: ReadonlyMap<LogicalId, CurrentResource>;
 }

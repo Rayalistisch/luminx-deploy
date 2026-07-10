@@ -14,10 +14,16 @@
 export { normalizeVersion, parseComposerJson, parseComposerLock } from './composer.js';
 export type { ComposerJson, ComposerLock } from './composer.js';
 export { parseDotEnvKeys } from './dotenv.js';
-export type { ComposerFacts, LockState, ProjectFacts } from './facts.js';
+export type {
+  ComposerFacts,
+  Framework,
+  FrameworkId,
+  LockState,
+  ProjectFacts,
+  RunnerId,
+} from './facts.js';
 export { FRAMEWORKS, detectFrameworks, parsePackageJson } from './frontend.js';
-export type { Framework, FrameworkId, PackageJson } from './frontend.js';
+export type { PackageJson } from './frontend.js';
 export { parseJsonObject, stringRecord } from './json.js';
 export { probeProject } from './probe.js';
-export { RUNNERS, RUNNER_MARKERS, detectRunners, isRunnerId, preferredRunner } from './runner.js';
-export type { RunnerId } from './runner.js';
+export { RUNNER_MARKERS, detectRunners, isRunnerId, preferredRunner } from './runner.js';

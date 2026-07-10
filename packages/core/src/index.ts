@@ -4,13 +4,36 @@
  * This package must never mention a concrete CMS. Everything CMS-specific reaches it
  * through the CmsAdapter interface. `pnpm check:purity` enforces this.
  *
- * Diffing, planning and execution land in M5. See docs/architecture.md §3.2.
+ * The executor — applying a plan — lands in M8. See docs/architecture.md §3.2.
  */
 
 export { hashOf } from './hash.js';
+
+export { checkCapabilities } from './adapter/capabilities.js';
+export type {
+  AdapterContext,
+  ApplyContext,
+  Capabilities,
+  CmsAdapter,
+  CmsInfo,
+} from './adapter/contract.js';
+export { MEMORY_ADAPTER_ID, createMemoryAdapter, currentModelOf } from './adapter/memory.js';
+export { createRegistry } from './adapter/registry.js';
+export type { AdapterRegistry } from './adapter/registry.js';
+
 export { compile } from './config/compiler.js';
 export type { CompiledModel } from './config/compiler.js';
 export { loadConfig, parseConfig, validateConfig } from './config/loader.js';
 export { pointerOf } from './config/pointer.js';
 export { ConfigSchema } from './config/schema.js';
 export * from './config/types.js';
+
+export { diffValues } from './diff/changes.js';
+export { diff } from './diff/differ.js';
+export type { DiffInput } from './diff/differ.js';
+
+export { topologicalOrder } from './plan/orderer.js';
+export { hasWiring, isWiringPath, wiringPathsOf } from './plan/phases.js';
+
+export { emptyLockfile, lookup, readLockfile, writeLockfile } from './state/lockfile.js';
+export type { LockEntry, Lockfile } from './state/lockfile.js';

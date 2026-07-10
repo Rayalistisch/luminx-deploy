@@ -6,23 +6,18 @@
  * parsers from guessing. The caller decides what to do with two answers.
  */
 
+import type { Framework, FrameworkId } from '@luminx/shared';
+
 import { parseJsonObject, stringRecord } from './json.js';
 
-export const FRAMEWORKS = [
-  { id: 'next', packageName: 'next' },
-  { id: 'nuxt', packageName: 'nuxt' },
-  { id: 'astro', packageName: 'astro' },
-  { id: 'sveltekit', packageName: '@sveltejs/kit' },
-  { id: 'remix', packageName: '@remix-run/react' },
-] as const;
-
-export type FrameworkId = (typeof FRAMEWORKS)[number]['id'];
-
-export interface Framework {
-  readonly id: FrameworkId;
-  /** The declared range, verbatim: `^15.0.0`. Not a resolved version — package.json has none. */
-  readonly constraint: string;
-}
+/** Which npm package betrays which framework. The ids themselves are part of ProjectFacts. */
+export const FRAMEWORKS: readonly (readonly [FrameworkId, string])[] = [
+  ['next', 'next'],
+  ['nuxt', 'nuxt'],
+  ['astro', 'astro'],
+  ['sveltekit', '@sveltejs/kit'],
+  ['remix', '@remix-run/react'],
+];
 
 export interface PackageJson {
   readonly name: string | null;
@@ -44,7 +39,7 @@ export const parsePackageJson = (text: string): PackageJson | null => {
 export const detectFrameworks = (pkg: PackageJson): readonly Framework[] => {
   const declared = { ...pkg.devDependencies, ...pkg.dependencies };
 
-  return FRAMEWORKS.flatMap(({ id, packageName }) => {
+  return FRAMEWORKS.flatMap(([id, packageName]) => {
     const constraint = declared[packageName];
     return constraint === undefined ? [] : [{ id, constraint }];
   });

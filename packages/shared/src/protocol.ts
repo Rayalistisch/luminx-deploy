@@ -10,7 +10,7 @@
  */
 
 import type { LuminxError } from './errors.js';
-import type { ContentModel, Resource, ResourceKind } from './ir.js';
+import type { CurrentModel, ResourceKind } from './ir.js';
 import type { Operation, OperationResult, Phase } from './plan.js';
 
 /** Bumped whenever the CLI↔CMS wire format changes incompatibly. */
@@ -54,7 +54,7 @@ export interface IntrospectRequest {
   readonly kinds?: readonly ResourceKind[];
 }
 
-export type IntrospectResponse = Envelope<ContentModel>;
+export type IntrospectResponse = Envelope<CurrentModel>;
 
 export interface ApplyRequest {
   readonly protocolVersion: ProtocolVersion;
@@ -100,9 +100,3 @@ export const isCompatible = (theirs: number): boolean => theirs === PROTOCOL_VER
 
 /** Narrowing helper so callers do not reach for `.data` on a failed envelope. */
 export const isOkEnvelope = <T>(envelope: Envelope<T>): envelope is OkEnvelope<T> => envelope.ok;
-
-/** A resource as the CMS reports it: the IR shape, plus the UID the CMS assigned. */
-export interface IntrospectedResource {
-  readonly resource: Resource;
-  readonly uid: string;
-}

@@ -9,5 +9,6 @@ export * from './canonical.js';
 export * from './errors.js';
 export * from './ir.js';
 export * from './plan.js';
+export * from './project.js';
 export * from './protocol.js';
 export * from './result.js';
