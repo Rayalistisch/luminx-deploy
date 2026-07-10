@@ -43,14 +43,25 @@ use luminx\craft\Introspect\Data\VolumeData;
  */
 final readonly class CraftGateway implements Gateway
 {
+    /**
+     * Craft's filesystems are keyed by handle in the project config and carry no UID. The handle
+     * is their identity, so the handle is what we report — an empty `uid` would be written into
+     * the lockfile and later used to address something that has no address.
+     *
+     * `type` is shortened from `craft\fs\Local` to `local`, because that is what a config says
+     * (§5.1). Reporting the class name would make a hand-written config and an introspected one
+     * disagree on a filesystem that is identical, and the diff would never converge.
+     */
+    private const FS_TYPES = ['craft\\fs\\Local' => 'local'];
+
     public function filesystems(): array
     {
         return array_values(array_map(
             static fn ($fs): FilesystemData => new FilesystemData(
-                uid: (string) $fs->uid,
+                uid: (string) $fs->handle,
                 handle: (string) $fs->handle,
                 name: (string) $fs->name,
-                type: $fs::class,
+                type: self::FS_TYPES[$fs::class] ?? $fs::class,
                 path: (string) ($fs->path ?? ''),
                 url: $fs->hasUrls ? (string) $fs->url : null,
             ),

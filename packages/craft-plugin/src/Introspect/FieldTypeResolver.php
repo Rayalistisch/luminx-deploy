@@ -71,7 +71,7 @@ final readonly class FieldTypeResolver
             'text' => $this->compact([
                 'type' => 'text',
                 'max' => $this->positiveInt($field->settings['charLimit'] ?? null),
-                'multiline' => $this->bool($field->settings['multiline'] ?? null),
+                'multiline' => $this->whenTrue($field->settings['multiline'] ?? null),
             ]),
             'number' => $this->compact([
                 'type' => 'number',
@@ -81,11 +81,11 @@ final readonly class FieldTypeResolver
             ]),
             'boolean' => $this->compact([
                 'type' => 'boolean',
-                'default' => $this->bool($field->settings['default'] ?? null),
+                'default' => $this->whenTrue($field->settings['default'] ?? null),
             ]),
             'date' => $this->compact([
                 'type' => 'date',
-                'showTime' => $this->bool($field->settings['showTime'] ?? null),
+                'showTime' => $this->whenTrue($field->settings['showTime'] ?? null),
             ]),
             'dropdown', 'multiselect' => [
                 'type' => $type,
@@ -136,9 +136,19 @@ final readonly class FieldTypeResolver
         );
     }
 
-    private function bool(mixed $value): ?bool
+    /**
+     * A boolean setting is reported only when it is true.
+     *
+     * Craft answers `multiline: false` for every plain text field; a config that never mentions
+     * `multiline` compiles to a spec without the key. Reporting the `false` would make the two
+     * hash differently, and every `generate` would show that field as changed, for ever. In the
+     * IR, absent means false — so absent is what a false must serialise to.
+     *
+     * Found by introspecting a real Craft install. No test without Craft could have shown it.
+     */
+    private function whenTrue(mixed $value): ?true
     {
-        return is_bool($value) ? $value : null;
+        return $value === true ? true : null;
     }
 
     private function number(mixed $value): int|float|null

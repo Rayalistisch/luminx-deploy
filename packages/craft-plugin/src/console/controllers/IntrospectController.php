@@ -26,21 +26,26 @@ use yii\console\ExitCode;
  */
 final class IntrospectController extends Controller
 {
-    /** Path of the request the CLI wrote. */
-    public string $request = '';
+    /**
+     * Not `$request` and `$response`.
+     *
+     * `yii\base\Controller` already declares both, untyped, for the Request and Response
+     * components it injects. Redeclaring them as typed strings is a compile error, and one that
+     * appears only when Craft loads the class — never in a test that does not boot Craft.
+     */
+    public string $requestPath = '';
 
-    /** Path the response must be written to. */
-    public string $response = '';
+    public string $responsePath = '';
 
     /** @return list<string> */
     public function options($actionID): array
     {
-        return [...parent::options($actionID), 'request', 'response'];
+        return [...parent::options($actionID), 'requestPath', 'responsePath'];
     }
 
     public function actionIndex(): int
     {
-        if ($this->request === '' || $this->response === '') {
+        if ($this->requestPath === '' || $this->responsePath === '') {
             // Nowhere to write an envelope to, so the exit code is the only channel left.
             return ExitCode::USAGE;
         }
@@ -48,7 +53,7 @@ final class IntrospectController extends Controller
         $writer = new ResponseWriter();
 
         try {
-            $payload = (new RequestReader())->read($this->request);
+            $payload = (new RequestReader())->read($this->requestPath);
 
             /** @var list<string>|null $kinds */
             $kinds = is_array($payload['kinds'] ?? null) ? array_values($payload['kinds']) : null;
@@ -56,18 +61,18 @@ final class IntrospectController extends Controller
             $resources = (new Introspector())->introspect(new CraftGateway(), $kinds);
 
             $writer->write(
-                $this->response,
+                $this->responsePath,
                 Envelope::success(['resources' => $resources], $this->diagnostics()),
             );
 
             return ExitCode::OK;
         } catch (ProtocolException $exception) {
-            $writer->write($this->response, Envelope::failure([$exception->toArray()], $this->diagnostics()));
+            $writer->write($this->responsePath, Envelope::failure([$exception->toArray()], $this->diagnostics()));
 
             return ExitCode::OK;
         } catch (Throwable $exception) {
             // A bug in the plugin. The envelope still arrives, so the CLI can name it (LX5001).
-            $writer->write($this->response, Envelope::failure([[
+            $writer->write($this->responsePath, Envelope::failure([[
                 'code' => 'LX5001',
                 'message' => $exception->getMessage(),
                 'hint' => 'This is a bug in craft-luminx.',

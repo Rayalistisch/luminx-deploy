@@ -10,11 +10,14 @@ import { checkCapabilities, compile, diff, loadConfig, readLockfile } from '@lum
 import type { AdapterRegistry } from '@luminx/core';
 import { probeProject } from '@luminx/parsers';
 import { ErrorCode, luminxError } from '@luminx/shared';
-import type { LuminxError, Plan } from '@luminx/shared';
+import type { LuminxError, Plan, ProjectFacts } from '@luminx/shared';
 
 import { ExitCode, exitCodeFor, exitCodeForAll } from '../exit.js';
 import type { Io } from '../io.js';
 import { paint, renderErrors, renderJson, renderPlan } from '../render.js';
+
+/** Adapters can only be built once the project has been read, so the CLI passes a factory. */
+export type RegistryFactory = (facts: ProjectFacts) => AdapterRegistry;
 
 export interface GenerateOptions {
   readonly configPath: string;
@@ -22,7 +25,9 @@ export interface GenerateOptions {
   readonly root: string;
   readonly json: boolean;
   readonly dryRun: boolean;
-  readonly registry: AdapterRegistry;
+  readonly registryFor: RegistryFactory;
+  /** Overrides the factory. Tests use it to plan against the in-memory adapter. */
+  readonly registry?: AdapterRegistry;
 }
 
 const fail = (io: Io, errors: readonly LuminxError[], json: boolean): ExitCode => {
@@ -42,7 +47,12 @@ const buildPlan = async (
   const compiled = compile(loaded.value);
   if (!compiled.ok) return { errors: compiled.error };
 
-  const adapter = options.registry.resolve(compiled.value.cms);
+  // PROBE before the adapter exists: an adapter's capabilities depend on which plugins the
+  // project has installed, so it cannot be built until the project has been read (§8.1, step 3).
+  const facts = await probeProject(options.root);
+
+  const registry = options.registry ?? options.registryFor(facts);
+  const adapter = registry.resolve(compiled.value.cms);
   if (!adapter.ok) return { errors: [adapter.error] };
 
   const supported = checkCapabilities(
@@ -55,7 +65,6 @@ const buildPlan = async (
   const lockfile = await readLockfile(options.lockfilePath);
   if (!lockfile.ok) return { errors: lockfile.error };
 
-  const facts = await probeProject(options.root);
   const context = { root: options.root, facts };
 
   const detected = await adapter.value.detect(context);

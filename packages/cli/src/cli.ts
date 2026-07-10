@@ -10,8 +10,11 @@ import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { createCraftAdapter, createRunner } from '@luminx/adapter-craft';
 import { createMemoryAdapter, createRegistry } from '@luminx/core';
 import type { AdapterRegistry } from '@luminx/core';
+import { isRunnerId } from '@luminx/parsers';
+import type { ProjectFacts, RunnerId } from '@luminx/shared';
 
 import { ExitCode } from './exit.js';
 import type { Io } from './io.js';
@@ -27,10 +30,28 @@ const DEFAULT_CONFIG = 'luminx.config.json';
 const DEFAULT_LOCKFILE = 'luminx.lock.json';
 
 /**
- * The composition root registers adapters, and nothing else may (§4). The memory adapter ships
- * so `generate --dry-run` works out of the box, with no CMS; the Craft adapter lands with M7.
+ * The composition root registers adapters, and nothing else may (§4).
+ *
+ * It takes ProjectFacts because an adapter's capabilities depend on what the project installed:
+ * `richtext` exists only where CKEditor does. So the registry is built after the probe, not
+ * before — which is also why this is a factory and not a constant.
  */
-export const defaultRegistry = (): AdapterRegistry => createRegistry([createMemoryAdapter()]);
+export const registryFor =
+  (runnerId: RunnerId | undefined, onCommand?: (command: string) => void) =>
+  (facts: ProjectFacts): AdapterRegistry => {
+    const runner = createRunner(runnerId ?? facts.runner, { cwd: facts.root });
+
+    return createRegistry([
+      // Ships so `generate --dry-run` works with no CMS at all, and so the fake adapter the
+      // tests use is the same one a user can point `"cms": "memory"` at.
+      createMemoryAdapter(),
+      createCraftAdapter({
+        runner,
+        facts,
+        ...(onCommand === undefined ? {} : { onCommand }),
+      }),
+    ]);
+  };
 
 /**
  * Names that exist so nobody else takes them, and so `luminx generate` says something better
@@ -62,7 +83,9 @@ Options
   --config <path>      Path to luminx.config.json (default: ./${DEFAULT_CONFIG})
   --lockfile <path>    Path to luminx.lock.json (default: ./${DEFAULT_LOCKFILE})
   --cwd <path>         Project root (default: the working directory)
+  --runner <name>      ddev | docker | local (default: detected)
   --dry-run            Compute the plan and write nothing
+  --verbose, -V        Print every command used to reach PHP
   --json               Machine-readable output on stdout
   --yes, -y            Never prompt. For CI.
   --no-color           Disable colour
@@ -78,6 +101,8 @@ export interface ParsedCli {
   readonly config: string | undefined;
   readonly lockfile: string | undefined;
   readonly cwd: string | undefined;
+  readonly runner: RunnerId | undefined;
+  readonly verbose: boolean;
   readonly dryRun: boolean;
   readonly json: boolean;
   readonly yes: boolean;
@@ -102,7 +127,9 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         config: { type: 'string' },
         lockfile: { type: 'string' },
         cwd: { type: 'string' },
+        runner: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
+        verbose: { type: 'boolean', short: 'V', default: false },
         json: { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
         'no-color': { type: 'boolean', default: false },
@@ -123,11 +150,19 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     throw new UsageError(`Expected one command, got: ${positionals.join(', ')}`);
   }
 
+  const runner = values.runner;
+
+  if (runner !== undefined && !isRunnerId(runner)) {
+    throw new UsageError(`Unknown runner "${runner}". Use ddev, docker or local.`);
+  }
+
   return {
     command: positionals[0],
     config: values.config,
     lockfile: values.lockfile,
     cwd: values.cwd,
+    runner,
+    verbose: values.verbose ?? false,
     dryRun: values['dry-run'] ?? false,
     json: values.json ?? false,
     yes: values.yes ?? false,
@@ -159,7 +194,7 @@ export const runCommand = async (
   parsed: ParsedCli,
   io: Io,
   cwd: string,
-  registry: AdapterRegistry = defaultRegistry(),
+  registry?: AdapterRegistry,
 ): Promise<ExitCode> => {
   if (parsed.version) {
     io.stdout(`${version}\n`);
@@ -186,6 +221,12 @@ export const runCommand = async (
 
   const { root, configPath, lockfilePath } = locate(parsed, cwd);
 
+  // `--verbose` prints the exact command each runner will execute, which is the only way to see
+  // what LuminX actually did to reach PHP (§7.3).
+  const verbose = parsed.verbose
+    ? (command: string) => io.stderr(`${paint(io.color, 'dim', `$ ${command}`)}\n`)
+    : undefined;
+
   switch (parsed.command) {
     case 'init':
       return runInit(io, {
@@ -196,7 +237,13 @@ export const runCommand = async (
       });
 
     case 'doctor':
-      return runDoctor(io, { configPath, root, json: parsed.json });
+      return runDoctor(io, {
+        configPath,
+        root,
+        json: parsed.json,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
 
     case 'generate':
       return runGenerate(io, {
@@ -205,7 +252,8 @@ export const runCommand = async (
         root,
         json: parsed.json,
         dryRun: parsed.dryRun,
-        registry,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
       });
 
     default:

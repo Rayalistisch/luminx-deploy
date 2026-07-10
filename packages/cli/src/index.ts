@@ -6,7 +6,7 @@
  */
 
 export { ExitCode, exitCodeFor, exitCodeForAll } from './exit.js';
-export { UsageError, defaultRegistry, parseCli, runCommand } from './cli.js';
+export { UsageError, parseCli, registryFor, runCommand } from './cli.js';
 export type { ParsedCli } from './cli.js';
 export { createIo } from './io.js';
 export type { Io, IoOptions } from './io.js';

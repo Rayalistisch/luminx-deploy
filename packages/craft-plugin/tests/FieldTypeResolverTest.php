@@ -26,6 +26,23 @@ it('drops settings Craft left unset', function () use ($resolver) {
         ->toBe(['type' => 'text']);
 });
 
+// Found by introspecting a real Craft install: it answers `multiline: false` for every plain text
+// field. A config that never mentions multiline compiles to a spec without the key, so reporting
+// the false would show that field as changed on every single run, for ever.
+it('reports a boolean setting only when it is true', function () use ($resolver) {
+    expect($resolver->resolve(field('craft\\fields\\PlainText', ['multiline' => false])))
+        ->toBe(['type' => 'text']);
+
+    expect($resolver->resolve(field('craft\\fields\\PlainText', ['multiline' => true])))
+        ->toBe(['type' => 'text', 'multiline' => true]);
+
+    expect($resolver->resolve(field('craft\\fields\\Lightswitch', ['default' => false])))
+        ->toBe(['type' => 'boolean']);
+
+    expect($resolver->resolve(field('craft\\fields\\Date', ['showTime' => false])))
+        ->toBe(['type' => 'date']);
+});
+
 it('reads charLimit even when Craft stored it as a string', function () use ($resolver) {
     expect($resolver->resolve(field('craft\\fields\\PlainText', ['charLimit' => '60'])))
         ->toBe(['type' => 'text', 'max' => 60]);
@@ -92,6 +109,8 @@ it('maps the simple types', function () use ($resolver) {
     expect($resolver->resolve(field('craft\\fields\\Link')))->toBe(['type' => 'link']);
     expect($resolver->resolve(field('craft\\fields\\Lightswitch', ['default' => true])))
         ->toBe(['type' => 'boolean', 'default' => true]);
+    expect($resolver->resolve(field('craft\\fields\\Date', ['showTime' => true])))
+        ->toBe(['type' => 'date', 'showTime' => true]);
     expect($resolver->resolve(field('craft\\fields\\Money', ['currency' => 'USD'])))
         ->toBe(['type' => 'money', 'currency' => 'USD']);
     expect($resolver->resolve(field('craft\\ckeditor\\Field')))->toBe(['type' => 'richtext']);

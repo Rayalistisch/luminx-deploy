@@ -40,7 +40,8 @@ describe('Envelope', function () {
 });
 
 describe('RequestReader', function () {
-    $reader = new RequestReader();
+    // No waiting in tests: the wait exists for a container's filesystem, not for a local file.
+    $reader = new RequestReader(waitSeconds: 0.0);
 
     it('reads a request', function () use ($reader) {
         $path = tempPath();

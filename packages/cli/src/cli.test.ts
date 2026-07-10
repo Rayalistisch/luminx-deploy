@@ -92,7 +92,7 @@ describe('runCommand', () => {
 });
 
 describe('init', () => {
-  it('writes a config that doctor then accepts', async () => {
+  it('defaults to craft, and doctor then says craft is not installed', async () => {
     const cwd = await tempDir();
     const io = fakeIo();
 
@@ -101,9 +101,20 @@ describe('init', () => {
     const written: unknown = JSON.parse(await readFile(join(cwd, 'luminx.config.json'), 'utf8'));
     expect(written).toMatchObject({ version: 1, cms: 'craft' });
 
+    // An empty directory is not a Craft project, and doctor says so rather than passing.
     const doctorIo = fakeIo();
-    expect(await runCommand(parseCli(['doctor']), doctorIo, cwd)).toBe(ExitCode.Success);
-    expect(doctorIo.out()).toContain('Config compiles');
+    expect(await runCommand(parseCli(['doctor']), doctorIo, cwd)).toBe(ExitCode.EnvironmentError);
+    expect(doctorIo.out()).toContain('Craft CMS');
+    expect(doctorIo.out()).toContain('not installed');
+  });
+
+  it('writes a config that doctor accepts when the cms needs nothing installed', async () => {
+    const cwd = await tempDir();
+    await runCommand(parseCli(['init', '--yes', '--cms', 'memory']), fakeIo(), cwd);
+
+    const io = fakeIo();
+    expect(await runCommand(parseCli(['doctor']), io, cwd)).toBe(ExitCode.Success);
+    expect(io.out()).toContain('Config compiles');
   });
 
   it('takes the cms and site name from flags', async () => {
@@ -158,7 +169,7 @@ describe('doctor', () => {
       join(cwd, 'luminx.config.json'),
       JSON.stringify({
         version: 1,
-        cms: 'fake',
+        cms: 'memory',
         sections: [
           {
             handle: 'pages',
@@ -181,7 +192,7 @@ describe('doctor', () => {
       join(cwd, 'luminx.config.json'),
       JSON.stringify({
         version: 1,
-        cms: 'fake',
+        cms: 'memory',
         sections: [
           {
             handle: 'sitePages',
@@ -201,7 +212,7 @@ describe('doctor', () => {
 
   it('emits machine-readable checks with --json', async () => {
     const cwd = await tempDir();
-    await runCommand(parseCli(['init', '--yes', '--cms', 'fake']), fakeIo(), cwd);
+    await runCommand(parseCli(['init', '--yes', '--cms', 'memory']), fakeIo(), cwd);
 
     const io = fakeIo();
     await runCommand(parseCli(['doctor', '--json']), io, cwd);
@@ -212,7 +223,7 @@ describe('doctor', () => {
 
   it('resolves --config relative to --cwd', async () => {
     const cwd = await tempDir();
-    await writeFile(join(cwd, 'other.json'), JSON.stringify({ version: 1, cms: 'fake' }), 'utf8');
+    await writeFile(join(cwd, 'other.json'), JSON.stringify({ version: 1, cms: 'memory' }), 'utf8');
 
     const io = fakeIo();
     expect(await runCommand(parseCli(['doctor', '--config', 'other.json']), io, cwd)).toBe(

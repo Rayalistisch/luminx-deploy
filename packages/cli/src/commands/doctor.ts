@@ -7,7 +7,8 @@
  * which is why `adapter` reports a warning rather than pretending to know.
  */
 
-import { compile, loadConfig } from '@luminx/core';
+import { checkCapabilities, compile, loadConfig } from '@luminx/core';
+import type { AdapterRegistry } from '@luminx/core';
 import { probeProject } from '@luminx/parsers';
 import type { ProjectFacts } from '@luminx/parsers';
 import type { HealthCheck, LuminxError } from '@luminx/shared';
@@ -15,11 +16,14 @@ import type { HealthCheck, LuminxError } from '@luminx/shared';
 import { ExitCode, exitCodeForAll } from '../exit.js';
 import type { Io } from '../io.js';
 import { renderChecks, renderErrors, renderJson } from '../render.js';
+import type { RegistryFactory } from './generate.js';
 
 export interface DoctorOptions {
   readonly configPath: string;
   readonly root: string;
   readonly json: boolean;
+  readonly registryFor: RegistryFactory;
+  readonly registry?: AdapterRegistry;
 }
 
 export interface DoctorReport {
@@ -108,7 +112,9 @@ const projectChecks = (facts: ProjectFacts): readonly HealthCheck[] => {
   return checks;
 };
 
-export const collectChecks = async (configPath: string, root: string): Promise<DoctorReport> => {
+export const collectChecks = async (options: DoctorOptions): Promise<DoctorReport> => {
+  const { configPath, root } = options;
+
   const facts = await probeProject(root);
   const checks: HealthCheck[] = [checkNode(process.version), ...projectChecks(facts)];
 
@@ -164,19 +170,46 @@ export const collectChecks = async (configPath: string, root: string): Promise<D
     });
   }
 
-  checks.push({
-    id: 'adapter',
-    label: 'CMS adapter',
-    status: 'warn',
-    detail: `none registered for "${compiled.value.cms}"`,
-    fix: 'Adapters land in M7. Until then doctor cannot inspect the CMS.',
-  });
+  const registry = options.registry ?? options.registryFor(facts);
+  const adapter = registry.resolve(compiled.value.cms);
+
+  if (!adapter.ok) {
+    checks.push({
+      id: 'adapter',
+      label: 'CMS adapter',
+      status: 'fail',
+      detail: `none registered for "${compiled.value.cms}"`,
+      ...(adapter.error.hint === undefined ? {} : { fix: adapter.error.hint }),
+    });
+    return { checks, errors: [adapter.error] };
+  }
+
+  // Everything above is about the project. Everything below asks the CMS, and only the adapter
+  // knows how (§7.1). doctor never mutates, so these are reads.
+  checks.push(...(await adapter.value.healthChecks({ root, facts })));
+
+  const unsupported = checkCapabilities(
+    compiled.value.model,
+    adapter.value.capabilities,
+    adapter.value.id,
+  );
+
+  if (!unsupported.ok) {
+    checks.push({
+      id: 'adapter.capabilities',
+      label: 'Config is expressible',
+      status: 'fail',
+      detail: `${unsupported.error.length} unsupported`,
+      fix: 'See the errors below.',
+    });
+    return { checks, errors: unsupported.error };
+  }
 
   return { checks, errors: [] };
 };
 
 export const runDoctor = async (io: Io, options: DoctorOptions): Promise<ExitCode> => {
-  const report = await collectChecks(options.configPath, options.root);
+  const report = await collectChecks(options);
 
   if (options.json) {
     io.stdout(renderJson(report));
