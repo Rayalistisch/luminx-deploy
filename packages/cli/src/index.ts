@@ -13,4 +13,5 @@ export type { Io, IoOptions } from './io.js';
 export { collectChecks, runDoctor } from './commands/doctor.js';
 export { runGenerate } from './commands/generate.js';
 export { runInit } from './commands/init.js';
+export { runSync } from './commands/sync.js';
 export { runUndo } from './commands/undo.js';

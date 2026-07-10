@@ -31,6 +31,8 @@ export * from './config/types.js';
 export { diffValues } from './diff/changes.js';
 export { diff } from './diff/differ.js';
 export type { DiffInput } from './diff/differ.js';
+export { detectDrift } from './diff/drift.js';
+export type { Drift } from './diff/drift.js';
 
 export { execute } from './plan/executor.js';
 export type { ExecuteInput, ExecutionReport } from './plan/executor.js';

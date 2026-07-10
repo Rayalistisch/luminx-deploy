@@ -22,6 +22,7 @@ import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
 import { runGenerate } from './commands/generate.js';
 import { runInit } from './commands/init.js';
+import { runSync } from './commands/sync.js';
 import { runUndo } from './commands/undo.js';
 
 const require = createRequire(import.meta.url);
@@ -61,7 +62,6 @@ export const registryFor =
  */
 const RESERVED: Readonly<Record<string, string>> = {
   plan: '`plan` writes the plan as a reviewable artefact. It lands with M12.',
-  sync: '`sync` needs drift detection. It lands with M10.',
   deploy: '`deploy` is planned for LuminX 1.x. See docs/architecture.md §11.',
 };
 
@@ -74,8 +74,8 @@ Commands
   init                 Write a minimal luminx.config.json. Never touches the CMS.
   doctor               Check the environment and the config. Never mutates.
   generate             Bring the CMS up to date. --dry-run to see it first.
+  sync                 Reconcile both sides, show drift. --check for CI, --prune to delete.
   undo                 Restore the snapshot taken before the last apply.
-  sync                 (M10) Reconcile both sides and show drift.
   plan                 (M12) Compute a plan as a reviewable artefact.
   deploy               (1.x) Apply a reviewed plan to another environment.
 
@@ -85,6 +85,8 @@ Options
   --cwd <path>         Project root (default: the working directory)
   --runner <name>      ddev | docker | local (default: detected)
   --dry-run            Compute the plan and write nothing
+  --check              sync: exit 1 if the CMS and config have diverged. For CI.
+  --prune              sync: delete resources the config no longer describes
   --verbose, -V        Print every command used to reach PHP
   --json               Machine-readable output on stdout
   --yes, -y            Never prompt. For CI.
@@ -106,6 +108,8 @@ export interface ParsedCli {
   readonly runner: RunnerId | undefined;
   readonly verbose: boolean;
   readonly dryRun: boolean;
+  readonly check: boolean;
+  readonly prune: boolean;
   readonly json: boolean;
   readonly yes: boolean;
   readonly color: boolean;
@@ -133,6 +137,8 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         cwd: { type: 'string' },
         runner: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
+        check: { type: 'boolean', default: false },
+        prune: { type: 'boolean', default: false },
         verbose: { type: 'boolean', short: 'V', default: false },
         json: { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
@@ -170,6 +176,8 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     runner,
     verbose: values.verbose ?? false,
     dryRun: values['dry-run'] ?? false,
+    check: values.check ?? false,
+    prune: values.prune ?? false,
     json: values.json ?? false,
     yes: values.yes ?? false,
     color: !(values['no-color'] ?? false),
@@ -271,6 +279,18 @@ export const runCommand = async (
         root,
         json: parsed.json,
         dryRun: parsed.dryRun,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
+
+    case 'sync':
+      return runSync(io, {
+        configPath,
+        lockfilePath,
+        root,
+        json: parsed.json,
+        check: parsed.check,
+        prune: parsed.prune,
         registryFor: registryFor(parsed.runner, verbose),
         ...(registry === undefined ? {} : { registry }),
       });

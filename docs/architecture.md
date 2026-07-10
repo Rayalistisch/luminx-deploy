@@ -1,6 +1,6 @@
 # LuminX — Technisch Ontwerp
 
-> Status: **vastgesteld** (2026-07-09). De beslissingen in §15 zijn genomen; M0 staat, M1 is nog niet begonnen.
+> Status: **in aanbouw** (2026-07-10). M0 t/m M10 zijn geïmplementeerd en tegen echte Craft 5.10 bewezen; M11 en M12 resteren.
 > Doel: de ontbrekende schakel tussen moderne frontend-frameworks en CMS'en.
 > Eerste doel-CMS: Craft CMS 5. CLI-first. Volledig deterministisch. Geen AI, geen LLM's, geen externe API's.
 
