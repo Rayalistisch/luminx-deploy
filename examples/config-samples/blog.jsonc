@@ -1,0 +1,82 @@
+{
+  // A fuller model: reusable fields, a matrix, an assets field backed by a volume, and two
+  // sections that reference each other — the cyclic case LuminX resolves in two phases.
+  "$schema": "https://luminx.dev/schema/v1.json",
+  "version": 1,
+  "cms": "craft",
+  "siteName": "Blog",
+
+  "filesystems": [
+    {
+      "handle": "local",
+      "name": "Local",
+      "type": "local",
+      "path": "@webroot/uploads",
+      "url": "@web/uploads",
+    },
+  ],
+  "volumes": [{ "handle": "images", "name": "Images", "fs": "local" }],
+
+  // Defined once, referenced by handle with $ref. One handle, one definition.
+  "fields": {
+    "heading": { "type": "text", "name": "Heading", "max": 120 },
+    "hero": { "type": "assets", "name": "Hero", "sources": ["images"], "maxRelations": 1 },
+    "related": { "type": "entries", "name": "Related Posts", "sources": ["posts"] },
+    "body": {
+      "type": "matrix",
+      "name": "Body",
+      "maxEntries": 20,
+      // In Craft 5 a matrix nests entry types, not block types.
+      "entryTypes": [{ "$ref": "#/entryTypes/textBlock" }],
+    },
+  },
+
+  "entryTypes": {
+    "textBlock": {
+      "name": "Text",
+      "fields": [{ "handle": "copy", "type": "richtext", "name": "Copy" }],
+    },
+    "page": {
+      "name": "Page",
+      "fields": [
+        { "$ref": "#/fields/heading", "required": true },
+        { "$ref": "#/fields/hero" },
+        { "$ref": "#/fields/body" },
+      ],
+    },
+    "post": {
+      "name": "Post",
+      "fields": [{ "$ref": "#/fields/heading", "required": true }, { "$ref": "#/fields/related" }],
+    },
+  },
+
+  "sections": [
+    {
+      "handle": "pages",
+      "name": "Pages",
+      "type": "structure",
+      "maxLevels": 3,
+      "uriFormat": "{slug}",
+      "template": "_pages/entry",
+      "entryTypes": [{ "$ref": "#/entryTypes/page" }],
+    },
+    {
+      "handle": "posts",
+      "name": "Posts",
+      "type": "channel",
+      "uriFormat": "blog/{slug}",
+      "template": "_blog/entry",
+      "entryTypes": [{ "$ref": "#/entryTypes/post" }],
+    },
+  ],
+
+  "categories": [
+    {
+      "handle": "topics",
+      "name": "Topics",
+      "maxLevels": 1,
+      "uriFormat": "topics/{slug}",
+      "template": "_topics/entry",
+    },
+  ],
+}

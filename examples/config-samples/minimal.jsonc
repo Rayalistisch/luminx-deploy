@@ -1,0 +1,34 @@
+{
+  // The smallest useful content model: one section, one entry type, one field.
+  // JSONC is accepted — these comments survive, because nothing rewrites the file.
+  "$schema": "https://luminx.dev/schema/v1.json",
+  "version": 1,
+  "cms": "craft",
+  "siteName": "Demo",
+
+  "sections": [
+    {
+      "handle": "pages",
+      "name": "Pages",
+      "type": "structure",
+      "maxLevels": 3,
+      "uriFormat": "{slug}",
+      "template": "_pages/entry",
+      "entryTypes": [
+        {
+          "handle": "page",
+          "name": "Page",
+          "fields": [
+            {
+              "handle": "heading",
+              "type": "text",
+              "name": "Heading",
+              "max": 120,
+              "required": true,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}

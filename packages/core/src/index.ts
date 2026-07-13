@@ -23,6 +23,7 @@ export type { AdapterRegistry } from './adapter/registry.js';
 
 export { compile } from './config/compiler.js';
 export type { CompiledModel } from './config/compiler.js';
+export { decompile } from './config/decompiler.js';
 export { loadConfig, parseConfig, validateConfig } from './config/loader.js';
 export { pointerOf } from './config/pointer.js';
 export { ConfigSchema } from './config/schema.js';

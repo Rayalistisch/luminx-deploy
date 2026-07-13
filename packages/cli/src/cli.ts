@@ -94,6 +94,7 @@ Options
   --list               undo: show the snapshots that exist
   --id <id>            undo: restore a particular snapshot
   --force              init: overwrite an existing config
+  --from-existing      init: write the config from a CMS that already has a model
   --cms <id>           init: skip the prompt
   --site-name <name>   init: skip the prompt
   -h, --help           Show this
@@ -108,6 +109,7 @@ export interface ParsedCli {
   readonly runner: RunnerId | undefined;
   readonly verbose: boolean;
   readonly dryRun: boolean;
+  readonly fromExisting: boolean;
   readonly check: boolean;
   readonly prune: boolean;
   readonly json: boolean;
@@ -137,6 +139,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         cwd: { type: 'string' },
         runner: { type: 'string' },
         'dry-run': { type: 'boolean', default: false },
+        'from-existing': { type: 'boolean', default: false },
         check: { type: 'boolean', default: false },
         prune: { type: 'boolean', default: false },
         verbose: { type: 'boolean', short: 'V', default: false },
@@ -176,6 +179,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     runner,
     verbose: values.verbose ?? false,
     dryRun: values['dry-run'] ?? false,
+    fromExisting: values['from-existing'] ?? false,
     check: values.check ?? false,
     prune: values.prune ?? false,
     json: values.json ?? false,
@@ -247,9 +251,13 @@ export const runCommand = async (
     case 'init':
       return runInit(io, {
         configPath,
+        root,
         force: parsed.force,
         cms: parsed.cms,
         siteName: parsed.siteName,
+        fromExisting: parsed.fromExisting,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
       });
 
     case 'doctor':
