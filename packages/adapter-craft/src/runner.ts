@@ -96,17 +96,32 @@ export const createDockerRunner = (options: RunnerOptions): Runner => {
 };
 
 /**
- * The SSH runner from §7.3 is not here. It would need a fifth `RunnerId`, and inventing one now
- * — or worse, giving it `local`'s id — would put a lie in a type to reserve a name. `deploy`
- * brings its own runner when it brings its own environments (§11.2); this interface is the only
- * thing it needs, and that is settled.
+ * The SSH runner reserved for `deploy` (§7.3, §11.2). A stub: its shape is settled — it is a
+ * Runner like the others — but the implementation ships with `@luminx/deploy`, which is a
+ * separate package under its own licence (§11.3). It reaches a remote host over the SSH trust the
+ * developer or CI already has; there is no inbound endpoint, and that is a security property, not
+ * a gap.
+ *
+ * Its `exec` refuses rather than pretends. Reserving the seam is the whole of M12 (§14): deploy is
+ * architecture now, not code.
  */
+export const createSshRunner = (options: RunnerOptions & { host?: string }): Runner => ({
+  id: 'ssh',
+  describe: (args) => `ssh ${options.host ?? '<host>'} 'cd … && php craft ${args.join(' ')}'`,
+  exec: () =>
+    Promise.reject(
+      new Error('The SSH runner ships with `luminx deploy` (LuminX 1.x). See docs/deploy.md.'),
+    ),
+});
+
 export const createRunner = (id: RunnerId, options: RunnerOptions): Runner => {
   switch (id) {
     case 'ddev':
       return createDdevRunner(options);
     case 'docker':
       return createDockerRunner(options);
+    case 'ssh':
+      return createSshRunner(options);
     case 'lando':
       // Lando is detected (§3.3) but has no runner yet. Failing loudly beats running the
       // developer's host PHP against a database that only exists inside the container.

@@ -18,8 +18,10 @@ use yii\db\Exception as DbException;
  */
 final readonly class Applier
 {
-    public function __construct(private GeneratorRegistry $registry = new GeneratorRegistry())
-    {
+    public function __construct(
+        private GeneratorRegistry $registry = new GeneratorRegistry(),
+        private WriteStrategy $writeStrategy = new ServiceApiWriteStrategy(),
+    ) {
     }
 
     /**
@@ -29,7 +31,9 @@ final readonly class Applier
      */
     public function apply(array $operations, array $resolved = []): array
     {
-        if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
+        // The write strategy decides whether this state can be written at all (§11.2). Today only
+        // the service-API path exists, and it refuses when allowAdminChanges is off.
+        if (!$this->writeStrategy->canWrite()) {
             throw ApplyException::adminChangesDisabled();
         }
 
@@ -60,9 +64,9 @@ final readonly class Applier
             $results[] = $this->result($logicalId, $uid, $this->statusOf($kind));
         }
 
-        // Craft writes project config asynchronously. Forcing the flush here means the response
-        // describes a CMS that has actually changed, not one that is about to.
-        Craft::$app->getProjectConfig()->saveModifiedConfigData();
+        // Craft writes project config asynchronously; the strategy forces the flush so the
+        // response describes a CMS that has actually changed, not one that is about to (§9.5).
+        $this->writeStrategy->flush();
 
         return ['results' => $results, 'resolved' => $resolved];
     }

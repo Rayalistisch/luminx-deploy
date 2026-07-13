@@ -22,6 +22,7 @@ import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
 import { runGenerate } from './commands/generate.js';
 import { runInit } from './commands/init.js';
+import { runPlan } from './commands/plan.js';
 import { runSync } from './commands/sync.js';
 import { runUndo } from './commands/undo.js';
 
@@ -61,8 +62,7 @@ export const registryFor =
  * pipeline calling `deploy` must never conclude that it deployed.
  */
 const RESERVED: Readonly<Record<string, string>> = {
-  plan: '`plan` writes the plan as a reviewable artefact. It lands with M12.',
-  deploy: '`deploy` is planned for LuminX 1.x. See docs/architecture.md §11.',
+  deploy: '`deploy` is planned for LuminX 1.x. See docs/deploy.md.',
 };
 
 const USAGE = `luminx ${version}
@@ -75,9 +75,9 @@ Commands
   doctor               Check the environment and the config. Never mutates.
   generate             Bring the CMS up to date. --dry-run to see it first.
   sync                 Reconcile both sides, show drift. --check for CI, --prune to delete.
+  plan                 Write the plan as a reviewable artefact. -o to a file.
   undo                 Restore the snapshot taken before the last apply.
-  plan                 (M12) Compute a plan as a reviewable artefact.
-  deploy               (1.x) Apply a reviewed plan to another environment.
+  deploy               (1.x) Apply a reviewed plan to another environment. See docs/deploy.md.
 
 Options
   --config <path>      Path to luminx.config.json (default: ./${DEFAULT_CONFIG})
@@ -85,6 +85,7 @@ Options
   --cwd <path>         Project root (default: the working directory)
   --runner <name>      ddev | docker | local (default: detected)
   --dry-run            Compute the plan and write nothing
+  --out, -o <path>     plan: write the plan to a file
   --check              sync: exit 1 if the CMS and config have diverged. For CI.
   --prune              sync: delete resources the config no longer describes
   --verbose, -V        Print every command used to reach PHP
@@ -118,6 +119,7 @@ export interface ParsedCli {
   readonly force: boolean;
   readonly list: boolean;
   readonly id: string | undefined;
+  readonly out: string | undefined;
   readonly cms: string | undefined;
   readonly siteName: string | undefined;
   readonly help: boolean;
@@ -149,6 +151,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         force: { type: 'boolean', default: false },
         list: { type: 'boolean', default: false },
         id: { type: 'string' },
+        out: { type: 'string', short: 'o' },
         cms: { type: 'string' },
         'site-name': { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
@@ -188,6 +191,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     force: values.force ?? false,
     list: values.list ?? false,
     id: values.id,
+    out: values.out,
     cms: values.cms,
     siteName: values['site-name'],
     help: values.help ?? false,
@@ -299,6 +303,17 @@ export const runCommand = async (
         json: parsed.json,
         check: parsed.check,
         prune: parsed.prune,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
+
+    case 'plan':
+      return runPlan(io, {
+        configPath,
+        lockfilePath,
+        root,
+        json: parsed.json,
+        out: parsed.out,
         registryFor: registryFor(parsed.runner, verbose),
         ...(registry === undefined ? {} : { registry }),
       });

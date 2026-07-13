@@ -9,7 +9,13 @@
  * installed; which of them constitutes "the CMS" is a question only an adapter can answer.
  */
 
-export const RUNNERS = ['ddev', 'lando', 'docker', 'local'] as const;
+/**
+ * `ssh` is reserved for `deploy` (§7.3, §11.2). It is never auto-detected — like `local`, it is
+ * only ever chosen — and its runner is a stub until deploy ships. Reserving the id here, in the
+ * milestone that prepares deploy (§14, M12), is not the empty name it would have been earlier:
+ * it is the seam deploy plugs into, declared where every other runner id already lives.
+ */
+export const RUNNERS = ['ddev', 'lando', 'docker', 'local', 'ssh'] as const;
 
 export type RunnerId = (typeof RUNNERS)[number];
 

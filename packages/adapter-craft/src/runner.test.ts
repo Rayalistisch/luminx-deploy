@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDdevRunner, createDockerRunner, createLocalRunner, createRunner } from './runner.js';
+import {
+  createDdevRunner,
+  createDockerRunner,
+  createLocalRunner,
+  createRunner,
+  createSshRunner,
+} from './runner.js';
 
 const options = { cwd: '/project' };
 
@@ -25,6 +31,25 @@ describe('runners', () => {
     expect(createRunner('ddev', options).id).toBe('ddev');
     expect(createRunner('local', options).id).toBe('local');
     expect(createRunner('docker', options).id).toBe('docker');
+  });
+
+  // Reserved for deploy (§11.2). Its shape is settled; its exec refuses rather than pretends.
+  describe('the ssh stub', () => {
+    it('describes an ssh command', () => {
+      expect(createSshRunner({ ...options, host: 'prod' }).describe(['luminx/apply'])).toContain(
+        'ssh prod',
+      );
+    });
+
+    it('carries the reserved id', () => {
+      expect(createRunner('ssh', options).id).toBe('ssh');
+    });
+
+    it('refuses to exec, pointing at deploy', async () => {
+      await expect(createSshRunner(options).exec(['luminx/introspect'])).rejects.toThrow(
+        /luminx deploy/,
+      );
+    });
   });
 
   // Lando is detected by the parsers but has no runner. Falling back to local PHP would run

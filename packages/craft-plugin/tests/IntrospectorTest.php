@@ -97,6 +97,39 @@ it('makes an entry type depend on the fields in its layout', function () use ($i
     expect($entryType['dependsOn'])->toBe(['field:title', 'field:hero']);
 });
 
+// The idempotency bug M12 surfaced against real Craft: a field the config left untabbed is put
+// in Craft's default 'Content' tab, and reading that back as `tab: Content` made every run see a
+// change. A field in the default tab must read back with no tab.
+it('omits the default tab, so an untabbed config round-trips', function () use ($introspector) {
+    $gw = new ArrayGateway(
+        fields: [new FieldData('u-h', 'heading', 'Heading', 'craft\\fields\\PlainText')],
+        entryTypes: [
+            new EntryTypeData('u-p', 'page', 'Page', [
+                new FieldLayoutEntryData('heading', false, 'Content'),
+            ]),
+        ],
+    );
+
+    $spec = byId($introspector->introspect($gw))['entryType:page']['spec'];
+
+    expect($spec)->toBe(['fields' => [['field' => 'field:heading', 'required' => false]]]);
+});
+
+it('keeps a tab that is not the default', function () use ($introspector) {
+    $gw = new ArrayGateway(
+        fields: [new FieldData('u-h', 'heading', 'Heading', 'craft\\fields\\PlainText')],
+        entryTypes: [
+            new EntryTypeData('u-p', 'page', 'Page', [
+                new FieldLayoutEntryData('heading', false, 'Sidebar'),
+            ]),
+        ],
+    );
+
+    $spec = byId($introspector->introspect($gw))['entryType:page']['spec'];
+
+    expect($spec['fields'][0]['tab'])->toBe('Sidebar');
+});
+
 it('makes a section depend on its entry types', function () use ($introspector) {
     $section = byId($introspector->introspect(gateway()))['section:pages'];
 

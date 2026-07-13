@@ -80,7 +80,7 @@ describe('runCommand', () => {
   });
 
   // A pipeline calling a command that does not exist yet must never read success.
-  it.each(['plan', 'deploy'])('reserves `%s` and exits non-zero', async (command) => {
+  it.each(['deploy'])('reserves `%s` and exits non-zero', async (command) => {
     const io = fakeIo();
     const code = await runCommand(parseCli([command]), io, '/');
     expect(code).not.toBe(ExitCode.Success);

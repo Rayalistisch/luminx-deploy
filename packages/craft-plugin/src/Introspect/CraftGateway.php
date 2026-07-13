@@ -217,6 +217,8 @@ final readonly class CraftGateway implements Gateway
 
                 $field = $element->getField();
 
+                // The raw tab name; the Introspector normalises the default away, where it is
+                // tested. See Introspector::layout().
                 $entries[] = new FieldLayoutEntryData(
                     fieldHandle: (string) $field->handle,
                     required: (bool) $element->required,

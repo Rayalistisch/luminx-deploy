@@ -161,6 +161,13 @@ final readonly class Introspector
     }
 
     /**
+     * Craft's default tab. A config that names no tab puts its fields here, so a field read back
+     * from the default tab must report no tab — otherwise a config that omitted it looks changed
+     * on every run, which is the idempotency bug this normalisation exists to prevent.
+     */
+    private const string DEFAULT_TAB = 'Content';
+
+    /**
      * @param list<FieldLayoutEntryData> $entries
      * @return list<array{field: string, required: bool, tab?: string}>
      */
@@ -169,7 +176,7 @@ final readonly class Introspector
         return array_map(static function (FieldLayoutEntryData $entry): array {
             $mapped = ['field' => 'field:' . $entry->fieldHandle, 'required' => $entry->required];
 
-            if ($entry->tab !== null) {
+            if ($entry->tab !== null && $entry->tab !== self::DEFAULT_TAB) {
                 $mapped['tab'] = $entry->tab;
             }
 

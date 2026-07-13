@@ -11,6 +11,12 @@ export { CRAFT_ADAPTER_ID, capabilitiesFor, createCraftAdapter } from './adapter
 export type { CraftAdapterOptions } from './adapter.js';
 export { EXCHANGE_DIR, createProtocolClient } from './protocol.js';
 export type { CallResult, ProtocolClient, ProtocolClientOptions } from './protocol.js';
-export { createDdevRunner, createDockerRunner, createLocalRunner, createRunner } from './runner.js';
+export {
+  createDdevRunner,
+  createDockerRunner,
+  createLocalRunner,
+  createRunner,
+  createSshRunner,
+} from './runner.js';
 export type { ExecResult, Runner, RunnerOptions } from './runner.js';
 export { toCurrentModel } from './translate.js';

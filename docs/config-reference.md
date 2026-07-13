@@ -43,7 +43,9 @@ A field or entry type defined in the reusable maps is used elsewhere with `$ref`
 ```
 
 `required` and `tab` describe *this use* of the field, not the field itself — the same field can
-be required in one entry type and optional in another. Entry types may also be written inline; the
+be required in one entry type and optional in another. Omit `tab` for the CMS's default tab;
+naming it explicitly (`"Content"` in Craft) is redundant and will read back as omitted, so leave
+it out. Entry types may also be written inline; the
 compiler hoists them to the top level and deduplicates them by handle, because in Craft 5 entry
 types are global and reusable.
 
