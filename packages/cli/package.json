@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "LuminX CLI — deterministic content model generation for modern CMSes.",
+  "description": "LuminX CLI \u2014 deterministic content model generation for modern CMSes.",
   "license": "MIT",
   "bin": {
     "luminx": "./dist/bin/luminx.js"
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@luminx/adapter-craft": "workspace:*",
+    "@luminx/codegen": "workspace:*",
     "@luminx/core": "workspace:*",
     "@luminx/parsers": "workspace:*",
     "@luminx/shared": "workspace:*"

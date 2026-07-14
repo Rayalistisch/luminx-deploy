@@ -16,4 +16,5 @@ export { runInit } from './commands/init.js';
 export { runNew } from './commands/new.js';
 export { runPlan } from './commands/plan.js';
 export { runSync } from './commands/sync.js';
+export { runTypes } from './commands/types.js';
 export { runUndo } from './commands/undo.js';

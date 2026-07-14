@@ -44,12 +44,21 @@ importers:
       '@luminx/adapter-craft':
         specifier: workspace:*
         version: link:../adapter-craft
+      '@luminx/codegen':
+        specifier: workspace:*
+        version: link:../codegen
       '@luminx/core':
         specifier: workspace:*
         version: link:../core
       '@luminx/parsers':
         specifier: workspace:*
         version: link:../parsers
+      '@luminx/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/codegen:
+    dependencies:
       '@luminx/shared':
         specifier: workspace:*
         version: link:../shared

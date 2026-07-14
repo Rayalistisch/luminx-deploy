@@ -25,6 +25,7 @@ import { runInit } from './commands/init.js';
 import { runNew } from './commands/new.js';
 import { runPlan } from './commands/plan.js';
 import { runSync } from './commands/sync.js';
+import { runTypes } from './commands/types.js';
 import { runUndo } from './commands/undo.js';
 
 const require = createRequire(import.meta.url);
@@ -78,6 +79,7 @@ Commands
   generate             Bring the CMS up to date. --dry-run to see it first.
   sync                 Reconcile both sides, show drift. --check for CI, --prune to delete.
   plan                 Write the plan as a reviewable artefact. -o to a file.
+  types                Emit TypeScript types for your frontend. -o to a file.
   undo                 Restore the snapshot taken before the last apply.
   deploy               (1.x) Apply a reviewed plan to another environment. See docs/deploy.md.
 
@@ -87,7 +89,7 @@ Options
   --cwd <path>         Project root (default: the working directory)
   --runner <name>      ddev | docker | local (default: detected)
   --dry-run            Compute the plan and write nothing
-  --out, -o <path>     plan: write the plan to a file
+  --out, -o <path>     plan/types: write the output to a file
   --check              sync: exit 1 if the CMS and config have diverged. For CI.
   --prune              sync: delete resources the config no longer describes
   --verbose, -V        Print every command used to reach PHP
@@ -348,6 +350,9 @@ export const runCommand = async (
         registryFor: registryFor(parsed.runner, verbose),
         ...(registry === undefined ? {} : { registry }),
       });
+
+    case 'types':
+      return runTypes(io, { configPath, out: parsed.out });
 
     case 'plan':
       return runPlan(io, {

@@ -6,11 +6,5 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [
-    { "path": "../shared" },
-    { "path": "../core" },
-    { "path": "../parsers" },
-    { "path": "../codegen" },
-    { "path": "../adapter-craft" }
-  ]
+  "references": [{ "path": "../shared" }]
 }

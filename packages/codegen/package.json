@@ -1,0 +1,25 @@
+{
+  "name": "@luminx/codegen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The content model, projected into TypeScript. One source of truth for the CMS and the frontend.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@luminx/shared": "workspace:*"
+  }
+}

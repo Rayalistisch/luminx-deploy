@@ -18,8 +18,15 @@ const ALLOWED = {
   '@luminx/shared': [],
   '@luminx/core': ['@luminx/shared'],
   '@luminx/parsers': ['@luminx/shared'],
+  '@luminx/codegen': ['@luminx/shared'],
   '@luminx/adapter-craft': ['@luminx/shared', '@luminx/core'],
-  luminx: ['@luminx/shared', '@luminx/core', '@luminx/parsers', '@luminx/adapter-craft'],
+  luminx: [
+    '@luminx/shared',
+    '@luminx/core',
+    '@luminx/parsers',
+    '@luminx/adapter-craft',
+    '@luminx/codegen',
+  ],
 };
 
 const isWorkspacePackage = (name) => Object.hasOwn(ALLOWED, name);

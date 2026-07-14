@@ -38,6 +38,7 @@ config against the same CMS always produces the same plan — that determinism i
 | `luminx doctor` | Check the environment and the config. Never mutates. |
 | `luminx generate` | Bring the CMS up to the config. `--dry-run` shows the plan and writes nothing. |
 | `luminx sync` | Reconcile both sides. `--check` fails CI on any divergence; `--prune` deletes what the config dropped. |
+| `luminx types` | Emit TypeScript types for your frontend, from the same config. |
 | `luminx undo` | Restore the snapshot taken before the last apply. |
 
 Every mutating command takes a snapshot before its first write, and reports drift — anything
@@ -81,6 +82,31 @@ In CI:
 npx luminx sync --check               # exit 1 if the CMS and the config have diverged
 ```
 
+## One source of truth, both halves
+
+The config describes your content model. The CMS is a projection of it — and so is your frontend:
+
+```bash
+npx luminx types -o src/luminx.ts
+```
+
+```ts
+import type { Page, LuminxSections } from './luminx.js';
+
+const render = (page: Page) => `<h1>${page.heading}</h1>`;   // heading: string
+```
+
+Rename `heading` in `luminx.config.json`, run `luminx generate` and `luminx types`, and Craft moves
+— while your Astro build fails until the component moves with it:
+
+```
+page.ts(7,22): error TS2339: Property 'heading' does not exist on type 'Page'.
+```
+
+That is the point. The types are generated from the *config*, not from a running CMS, so they can
+be produced and typechecked in CI with no Docker, no PHP and no database. A frontend that cannot
+typecheck without a live CMS is a frontend that cannot typecheck.
+
 ## Configuration
 
 The config is JSON (JSONC accepted — comments survive, because nothing rewrites the file). A
@@ -95,6 +121,7 @@ handle is the stable key; a name is a free label. See
 | `@luminx/shared` | The IR, operations, plan, wire protocol, error codes. Zero dependencies. |
 | `@luminx/core` | Load, validate, compile, diff, plan, execute. Knows no CMS. |
 | `@luminx/parsers` | Reads a project: composer, `.env`, `package.json`, the runner. |
+| `@luminx/codegen` | The content model, projected into TypeScript. Knows no CMS. |
 | `@luminx/adapter-craft` | The Craft side, in TypeScript: runners, the protocol client, IR translation. |
 | `luminx` | The CLI. The composition root. |
 | `luminx/craft-luminx` | The Craft 5 plugin, in PHP. Reads and applies. |
