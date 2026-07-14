@@ -19,4 +19,6 @@ export {
   createSshRunner,
 } from './runner.js';
 export type { ExecResult, Runner, RunnerOptions } from './runner.js';
+export { realExec, scaffoldCraft } from './scaffold.js';
+export type { CraftScaffoldDeps, ScaffoldExec, ScaffoldExecResult } from './scaffold.js';
 export { toCurrentModel } from './translate.js';

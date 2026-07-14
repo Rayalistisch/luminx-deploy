@@ -22,6 +22,7 @@ import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
 import { runGenerate } from './commands/generate.js';
 import { runInit } from './commands/init.js';
+import { runNew } from './commands/new.js';
 import { runPlan } from './commands/plan.js';
 import { runSync } from './commands/sync.js';
 import { runUndo } from './commands/undo.js';
@@ -71,6 +72,7 @@ Usage
   luminx <command> [options]
 
 Commands
+  new                  Create a CMS project from nothing, and apply a starter model.
   init                 Write a minimal luminx.config.json. Never touches the CMS.
   doctor               Check the environment and the config. Never mutates.
   generate             Bring the CMS up to date. --dry-run to see it first.
@@ -96,8 +98,13 @@ Options
   --id <id>            undo: restore a particular snapshot
   --force              init: overwrite an existing config
   --from-existing      init: write the config from a CMS that already has a model
-  --cms <id>           init: skip the prompt
-  --site-name <name>   init: skip the prompt
+  --cms <id>           init/new: which CMS (default: craft)
+  --site-name <name>   init/new: skip the prompt
+  --admin-email <a>    new: admin address
+  --admin-password <p> new: admin password
+  --php <version>      new: PHP version (default: 8.3)
+  --database <spec>    new: database (default: mysql:8.0)
+  --plugin-path <path> new: install craft-luminx from a local checkout
   -h, --help           Show this
   -v, --version        Show the version
 `;
@@ -122,6 +129,11 @@ export interface ParsedCli {
   readonly out: string | undefined;
   readonly cms: string | undefined;
   readonly siteName: string | undefined;
+  readonly adminEmail: string | undefined;
+  readonly adminPassword: string | undefined;
+  readonly php: string | undefined;
+  readonly database: string | undefined;
+  readonly pluginPath: string | undefined;
   readonly help: boolean;
   readonly version: boolean;
 }
@@ -154,6 +166,11 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         out: { type: 'string', short: 'o' },
         cms: { type: 'string' },
         'site-name': { type: 'string' },
+        'admin-email': { type: 'string' },
+        'admin-password': { type: 'string' },
+        php: { type: 'string' },
+        database: { type: 'string' },
+        'plugin-path': { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', short: 'v', default: false },
       },
@@ -194,6 +211,11 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     out: values.out,
     cms: values.cms,
     siteName: values['site-name'],
+    adminEmail: values['admin-email'],
+    adminPassword: values['admin-password'],
+    php: values.php,
+    database: values.database,
+    pluginPath: values['plugin-path'],
     help: values.help ?? false,
     version: values.version ?? false,
   };
@@ -252,6 +274,26 @@ export const runCommand = async (
     : undefined;
 
   switch (parsed.command) {
+    case 'new': {
+      const knobs: Record<string, string> = {};
+      if (parsed.php !== undefined) knobs['php'] = parsed.php;
+      if (parsed.database !== undefined) knobs['database'] = parsed.database;
+      if (parsed.pluginPath !== undefined) knobs['pluginPath'] = parsed.pluginPath;
+
+      return runNew(io, {
+        root,
+        configPath,
+        lockfilePath,
+        cms: parsed.cms ?? 'craft',
+        siteName: parsed.siteName,
+        adminEmail: parsed.adminEmail,
+        adminPassword: parsed.adminPassword,
+        knobs,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
+    }
+
     case 'init':
       return runInit(io, {
         configPath,

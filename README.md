@@ -33,6 +33,7 @@ config against the same CMS always produces the same plan — that determinism i
 
 | Command | What it does |
 |---|---|
+| `luminx new` | Create a CMS project from nothing — DDEV, Craft, the plugin — and apply a starter model. |
 | `luminx init` | Write a minimal config. `--from-existing` writes one from a CMS that already has a model. |
 | `luminx doctor` | Check the environment and the config. Never mutates. |
 | `luminx generate` | Bring the CMS up to the config. `--dry-run` shows the plan and writes nothing. |
@@ -42,7 +43,22 @@ config against the same CMS always produces the same plan — that determinism i
 Every mutating command takes a snapshot before its first write, and reports drift — anything
 changed in the control panel since the last apply — before it writes over it.
 
-## A first run
+## From nothing
+
+```bash
+mkdir my-site && cd my-site
+npx luminx new                        # DDEV + Craft 5 + the plugin + a starter content model
+```
+
+One command, an empty directory, and a running CMS with your model already applied. It needs
+[DDEV](https://ddev.com) — that is a decision, not a limitation: standing Craft up on a bare host
+means the developer must already have the right PHP, the right extensions and a database, which is
+exactly the pain DDEV removes.
+
+Until `craft-luminx` is published, point at a local checkout:
+`npx luminx new --plugin-path ../luminx/packages/craft-plugin`
+
+## A first run on a CMS you already have
 
 ```bash
 npx luminx init                       # write a starter config

@@ -16,6 +16,9 @@ export type {
   Capabilities,
   CmsAdapter,
   CmsInfo,
+  ScaffoldContext,
+  ScaffoldOptions,
+  ScaffoldResult,
 } from './adapter/contract.js';
 export { MEMORY_ADAPTER_ID, createMemoryAdapter, currentModelOf } from './adapter/memory.js';
 export { createRegistry } from './adapter/registry.js';

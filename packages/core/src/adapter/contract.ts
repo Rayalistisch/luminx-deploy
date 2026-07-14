@@ -55,6 +55,44 @@ export interface ApplyContext extends AdapterContext {
   readonly resolved: ReadonlyMap<LogicalId, string>;
 }
 
+/**
+ * Standing a CMS up from nothing.
+ *
+ * Every other method here assumes the CMS exists. This one creates it, and it is the only place
+ * where LuminX brings a project into being rather than reconciling one that already is.
+ *
+ * Deliberately thin, and deliberately neutral: the core knows a site has a name and an admin, and
+ * nothing else. Everything a particular CMS needs to be born — a PHP version, a database engine,
+ * where to find a plugin — travels in `options`, which the core carries and never reads. That is
+ * the same escape hatch the IR's `raw` uses, for the same reason.
+ */
+export interface ScaffoldOptions {
+  readonly root: string;
+  readonly siteName: string;
+  readonly siteUrl?: string;
+  readonly admin: {
+    readonly username: string;
+    readonly email: string;
+    readonly password: string;
+  };
+  /** Adapter-specific knobs. Opaque to the core (`php`, `database`, `pluginPath`, …). */
+  readonly options?: Readonly<Record<string, string>>;
+}
+
+export interface ScaffoldContext {
+  /** Scaffolding takes minutes. This is how the CLI shows it is alive. */
+  readonly onStep?: (message: string) => void;
+}
+
+export interface ScaffoldResult {
+  readonly root: string;
+  readonly version: string;
+  /** The URL the site is now reachable at, when the adapter can say. */
+  readonly url?: string;
+  /** What the user still has to do, or should know. Printed verbatim. */
+  readonly notes: readonly string[];
+}
+
 export interface CmsAdapter {
   readonly id: string;
   readonly protocolVersion: number;
@@ -86,6 +124,16 @@ export interface CmsAdapter {
   readonly listSnapshots?: (
     context: AdapterContext,
   ) => Promise<Result<readonly SnapshotRef[], LuminxError>>;
+
+  /**
+   * Optional: `luminx new`. An adapter that cannot stand its CMS up from nothing simply omits
+   * this, and the CLI says so rather than pretending. It is the one method that runs before the
+   * CMS exists, so it takes no AdapterContext — there is no project to describe yet.
+   */
+  readonly scaffold?: (
+    options: ScaffoldOptions,
+    context: ScaffoldContext,
+  ) => Promise<Result<ScaffoldResult, LuminxError>>;
 
   /** CMS-specific doctor checks, on top of the generic ones. */
   readonly healthChecks: (context: AdapterContext) => Promise<readonly HealthCheck[]>;

@@ -21,6 +21,7 @@ import type {
 
 import { createProtocolClient } from './protocol.js';
 import type { Runner } from './runner.js';
+import { scaffoldCraft } from './scaffold.js';
 import { toCurrentModel } from './translate.js';
 
 export const CRAFT_ADAPTER_ID = 'craft';
@@ -334,6 +335,9 @@ export const createCraftAdapter = (options: CraftAdapterOptions): CmsAdapter => 
 
       return response.ok ? ok(undefined) : response;
     },
+
+    // The one method that runs before Craft exists, so it takes no AdapterContext (§ contract).
+    scaffold: (scaffoldOptions, scaffoldContext) => scaffoldCraft(scaffoldOptions, scaffoldContext),
 
     listSnapshots: async (context) => {
       const response = await client(context).call('luminx/snapshot', { action: 'list' });
