@@ -1,6 +1,6 @@
 {
   "name": "@luminx/adapter-craft",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "CmsAdapter implementation for Craft CMS 5. Speaks the wire protocol to the craft-luminx plugin.",
