@@ -13,11 +13,14 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { compile, validateConfig } from '@luminx/core';
+import type { AdapterRegistry } from '@luminx/core';
+import { probeProject } from '@luminx/parsers';
 
 import { ExitCode, exitCodeForAll } from '../exit.js';
 import type { Io } from '../io.js';
 import { paint, renderErrors } from '../render.js';
 import { importAstroContent } from '../import/astro.js';
+import type { RegistryFactory } from './pipeline.js';
 
 export interface ImportOptions {
   readonly root: string;
@@ -26,6 +29,8 @@ export interface ImportOptions {
   readonly force: boolean;
   /** Where the frontend declares its content. Defaults to Astro's location. */
   readonly from: string | undefined;
+  readonly registryFor: RegistryFactory;
+  readonly registry?: AdapterRegistry;
 }
 
 const DEFAULT_ASTRO_SCHEMA = 'src/content/config.ts';
@@ -61,7 +66,26 @@ export const runImport = async (io: Io, options: ImportOptions): Promise<ExitCod
     return ExitCode.ConfigError;
   }
 
-  const imported = importAstroContent(source, options.cms);
+  /**
+   * The handles the target CMS keeps for itself, asked of the adapter rather than guessed.
+   *
+   * Craft reserves `author`, `type`, `section` and more on every entry, and an Astro blog declares
+   * `author` as a matter of course. Importing it as written produced a config that stood a CMS up
+   * and then died on the ninth write. The importer stays CMS-neutral: it renames what it is told to
+   * rename, and this is where the telling happens.
+   */
+  const registry = options.registry ?? options.registryFor(await probeProject(options.root));
+  const adapter = registry.resolve(options.cms);
+  if (!adapter.ok) {
+    io.stderr(renderErrors(io.color, [adapter.error]));
+    return exitCodeForAll([adapter.error]);
+  }
+
+  const imported = importAstroContent(
+    source,
+    options.cms,
+    adapter.value.capabilities.reservedFieldHandles ?? [],
+  );
   if (!imported.ok) {
     io.stderr(renderErrors(io.color, imported.error));
     return exitCodeForAll(imported.error);

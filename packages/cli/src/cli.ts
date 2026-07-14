@@ -298,6 +298,8 @@ export const runCommand = async (
         cms: parsed.cms ?? 'craft',
         force: parsed.force,
         from: parsed.from,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
       });
 
     case 'new': {

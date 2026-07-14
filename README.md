@@ -57,8 +57,8 @@ One command, an empty directory, and a running CMS with your model already appli
 means the developer must already have the right PHP, the right extensions and a database, which is
 exactly the pain DDEV removes.
 
-Until `craft-luminx` is published, point at a local checkout:
-`npx luminx new --plugin-path ../luminx/packages/craft-plugin`
+The Craft plugin comes from Packagist ([`luminx/craft-luminx`](https://packagist.org/packages/luminx/craft-luminx)); `new` installs it for you. To work against a local checkout of the plugin instead — you are changing it, or pinning to something unreleased — pass
+`--plugin-path ../luminx/packages/craft-plugin`.
 
 ## From a frontend you already built
 
@@ -66,9 +66,16 @@ If the site exists — an Astro project with content collections — LuminX can 
 and stand a matching CMS behind it:
 
 ```bash
+cd my-astro-site
 npx luminx import                     # src/content/config.ts (Zod) → luminx.config.json
-npx luminx new                        # a Craft with that model
+mkdir cms
+npx luminx new --cwd cms --config ../luminx.config.json   # a Craft holding that model
 ```
+
+The CMS gets its own directory. Craft brings a `composer.json`, a `web/` root and a database, and
+none of that can share a home with your frontend's — so `new` refuses to build on top of files it
+did not put there. The config stays where `import` wrote it, at the root of the site it describes,
+and both halves read the same one.
 
 `import` reads the Zod schema with a real TypeScript parser and reports every decision it made: a
 Zod schema is richer than any CMS model, so an array of objects becomes a matrix, and anything with

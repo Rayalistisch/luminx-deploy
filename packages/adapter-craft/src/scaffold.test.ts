@@ -186,9 +186,10 @@ describe('scaffoldCraft', () => {
   });
 
   describe('the plugin source', () => {
-    // Until craft-luminx is on Packagist, a local checkout is the only way in — and a composer
-    // error nobody can read is a worse answer than saying so.
-    it('says the plugin is unpublished when composer cannot find it', async () => {
+    // craft-luminx is on Packagist, so a failure here is Composer's to explain — a version clash, a
+    // network, a PHP too old. We used to answer every one of them with "it is not published yet",
+    // which was true once and then quietly was not. Repeat what Composer said instead of guessing.
+    it('passes composer’s own error through when the install fails', async () => {
       const rec = recorder({
         match: 'composer require',
         result: { code: 1, stdout: '', stderr: 'Could not find a matching version' },
@@ -196,7 +197,7 @@ describe('scaffoldCraft', () => {
 
       const result = await scaffoldCraft(options, {}, deps(rec));
 
-      expect(!result.ok && result.error.hint).toContain('--plugin-path');
+      expect(!result.ok && result.error.hint).toContain('Could not find a matching version');
     });
 
     /**

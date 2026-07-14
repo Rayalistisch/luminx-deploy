@@ -10,13 +10,22 @@
  * step of every other day: a `generate` that converges.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-import { compile, diff, execute, validateConfig, writeLockfile } from '@luminx/core';
-import type { AdapterRegistry, ScaffoldResult } from '@luminx/core';
+import {
+  checkCapabilities,
+  compile,
+  diff,
+  execute,
+  parseConfig,
+  validateConfig,
+  writeLockfile,
+} from '@luminx/core';
+import type { AdapterRegistry, LuminxConfig, ScaffoldResult } from '@luminx/core';
 import { probeProject } from '@luminx/parsers';
-import { ErrorCode, luminxError } from '@luminx/shared';
+import { ErrorCode, luminxError, ok } from '@luminx/shared';
+import type { LuminxError, Result } from '@luminx/shared';
 
 import { ExitCode, exitCodeFor, exitCodeForAll } from '../exit.js';
 import type { Io } from '../io.js';
@@ -67,6 +76,28 @@ const starterConfig = (cms: string, siteName: string) => ({
   ],
 });
 
+/**
+ * The config, if there is one — `null` if there is not.
+ *
+ * Not `core`'s `loadConfig`, which treats a missing file as an error and points at `luminx init`.
+ * For every other command that is right; for this one, absence is the ordinary case and the reason
+ * the starter exists. A malformed config still fails, and loudly: it means the user wrote something
+ * they meant, and quietly replacing it with the starter would be the worst answer available.
+ */
+const loadConfig = async (
+  path: string,
+): Promise<Result<LuminxConfig | null, readonly LuminxError[]>> => {
+  let text: string;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ok(null);
+    throw error;
+  }
+
+  return parseConfig(text, path);
+};
+
 export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => {
   const facts = await probeProject(options.root);
   const registry = options.registry ?? options.registryFor(facts);
@@ -116,14 +147,29 @@ export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => 
   const result: ScaffoldResult = scaffolded.value;
   io.stdout(`\n  ${paint(io.color, 'green', '✔')} ${options.cms} ${result.version} is running.\n`);
 
-  // Write the starter config, then apply it — so `new` ends where a normal day starts.
-  const config = starterConfig(options.cms, siteName);
+  /**
+   * A config that is already there is the whole reason the CMS is being stood up.
+   *
+   * `luminx import` reads an Astro site's content model and writes it here; the next step is a CMS
+   * that holds that model. This command used to overwrite it with the starter — silently throwing
+   * away the model the user came for, and standing up a CMS for a blog nobody asked for. The
+   * starter exists for an empty start, not to bulldoze an answer we already have.
+   */
+  const existing = await loadConfig(options.configPath);
+  if (!existing.ok) return fail(io, existing.error);
+
+  const adopted = existing.value !== null;
+  const config = adopted ? existing.value : starterConfig(options.cms, siteName);
 
   const validated = validateConfig(config);
   if (!validated.ok) return fail(io, validated.error);
 
-  await writeFile(options.configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-  io.stdout(`  ${paint(io.color, 'green', '✔')} Wrote ${options.configPath}\n`);
+  if (adopted) {
+    io.stdout(`  ${paint(io.color, 'green', '✔')} Using ${options.configPath}\n`);
+  } else {
+    await writeFile(options.configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+    io.stdout(`  ${paint(io.color, 'green', '✔')} Wrote ${options.configPath}\n`);
+  }
 
   const compiled = compile(validated.value);
   if (!compiled.ok) return fail(io, compiled.error);
@@ -134,6 +180,17 @@ export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => 
   const live = (options.registry ?? options.registryFor(built)).resolve(options.cms);
   if (!live.ok) return fail(io, [live.error]);
 
+  /**
+   * The gate every other command goes through (`buildPlan`, pipeline.ts), and this one skipped.
+   *
+   * A model the CMS cannot hold — a field named `title` on Craft, where entries already have one —
+   * used to get all the way to the writing, fail on the eighth resource, and leave a half-built CMS
+   * behind. The check knows this before a single write; `new` simply never asked it. Refusing a
+   * whole plan costs a message. Refusing it halfway costs a rollback.
+   */
+  const supported = checkCapabilities(compiled.value.model, live.value.capabilities, live.value.id);
+  if (!supported.ok) return fail(io, supported.error);
+
   const context = { root: options.root, facts: built };
 
   const current = await live.value.introspect(context);
@@ -142,7 +199,7 @@ export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => 
   const plan = diff({ desired: compiled.value, current: current.value, lockfile: null });
   if (!plan.ok) return fail(io, plan.error);
 
-  io.stdout(`\n  Applying the starter content model…\n`);
+  io.stdout(`\n  Applying the ${adopted ? 'content model' : 'starter content model'}…\n`);
 
   const report = await execute({
     plan: plan.value,

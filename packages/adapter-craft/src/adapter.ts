@@ -53,13 +53,39 @@ const installed = (facts: ProjectFacts, packageName: string): string | null =>
   facts.composer?.installed[packageName] ?? null;
 
 /**
- * Handles Craft keeps for itself, from `craft\\base\\Field::RESERVED_HANDLES`. A field named any
- * of these fails Craft's own validation mid-save; caught here, it fails before the plan with a
- * pointer instead (§7.1). The adapter is allowed to know Craft, so the list lives here — it is
- * duplicated knowledge, but a stale entry only means falling back to Craft's own mid-apply error,
- * which is safe.
+ * Handles Craft keeps for itself. A field named any of these fails Craft's own validation mid-save;
+ * caught here, it fails before the plan with a pointer instead (§7.1). The adapter is allowed to
+ * know Craft, so the list lives here.
+ *
+ * Craft enforces this in two places, and we long knew only the first:
+ *
+ *   1. `craft\base\Field::RESERVED_HANDLES` — every element, everywhere. The list below.
+ *   2. `craft\models\EntryType::validate()`, which hands the field layout a *second* list
+ *      (`author`, `section`, `type`, `postDate`, …) — the attributes an entry itself has.
+ *
+ * Missing the second cost a real run: `luminx import` on an Astro blog produced an `author` field,
+ * the plan passed this check clean, Craft created the field happily, and then rejected the entry
+ * type that used it — nine resources into the apply. `field:author` is legal; an entry *layout*
+ * holding it is not.
+ *
+ * The two are merged rather than kept apart, because a LuminX field exists to be used, and nearly
+ * every field lands in an entry type layout. A field named `author` used only in a global set would
+ * be refused here though Craft would have taken it — an over-refusal, which costs a message. The
+ * other direction costs a half-built CMS.
  */
-const RESERVED_FIELD_HANDLES: readonly string[] = [
+const ENTRY_TYPE_RESERVED_HANDLES: readonly string[] = [
+  // craft\models\EntryType::validate(), Craft 5.10.
+  'author',
+  'authorId',
+  'authorIds',
+  'authors',
+  'postDate',
+  'section',
+  'sectionId',
+  'type',
+];
+
+const FIELD_RESERVED_HANDLES: readonly string[] = [
   'ancestors',
   'applyingDraft',
   'archived',
@@ -143,6 +169,11 @@ const RESERVED_FIELD_HANDLES: readonly string[] = [
   'viewMode',
   'where',
 ];
+
+/** Both lists Craft enforces, as one — see the note above. Sorted, so the capabilities are stable. */
+const RESERVED_FIELD_HANDLES: readonly string[] = [
+  ...new Set([...FIELD_RESERVED_HANDLES, ...ENTRY_TYPE_RESERVED_HANDLES]),
+].sort();
 
 /**
  * What this adapter can express, given what is actually installed.

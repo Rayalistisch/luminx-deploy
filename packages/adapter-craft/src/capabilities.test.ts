@@ -79,3 +79,54 @@ describe('the adapter and the plugin agree on what Craft can do', () => {
     expect(await registeredGenerators()).toEqual(files);
   });
 });
+
+/**
+ * Craft refuses a reserved handle from two lists, and we knew only one.
+ *
+ * `Field::RESERVED_HANDLES` covers every element. `EntryType::validate()` adds a second list for
+ * the attributes an entry *has* — `author`, `section`, `type`, `postDate`. A field named `author`
+ * is created without complaint; the entry type that uses it is then rejected. So a real run got
+ * nine resources into an apply before Craft said no, which is precisely the failure the capability
+ * check exists to prevent (§7.1).
+ */
+describe('the handles Craft keeps for itself', () => {
+  const reserved = () => capabilitiesFor(facts()).reservedFieldHandles ?? [];
+
+  it('holds both of Craft’s lists, not just the element-wide one', () => {
+    expect(reserved()).toContain('title'); // Field::RESERVED_HANDLES
+    expect(reserved()).toContain('author'); // EntryType::validate — the one that was missing
+    expect(reserved()).toEqual(
+      expect.arrayContaining(['author', 'authorId', 'postDate', 'section', 'sectionId', 'type']),
+    );
+  });
+
+  /**
+   * Held against Craft itself, when Craft is here.
+   *
+   * The plugin's vendor/ is not committed, so this cannot run in CI — but on any machine that has
+   * installed the plugin's dependencies, a Craft release that adds a reserved word fails here
+   * rather than in someone's database. A skipped test is honest; a hand-copied list asserted
+   * against itself is not.
+   */
+  it('matches the list Craft actually enforces, when Craft’s source is available', async () => {
+    const entryType = `${pluginRoot}vendor/craftcms/cms/src/models/EntryType.php`;
+
+    let source: string;
+    try {
+      source = await readFile(entryType, 'utf8');
+    } catch {
+      return; // Craft is not installed here; the assertion above still pins the list.
+    }
+
+    const block = /reservedFieldHandles\s*=\s*\[([\s\S]*?)\];/.exec(source)?.[1];
+    expect(
+      block,
+      'EntryType no longer declares reservedFieldHandles — read it again',
+    ).toBeDefined();
+
+    const craftReserves = [...(block ?? '').matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    expect(craftReserves.length).toBeGreaterThan(0);
+
+    for (const handle of craftReserves) expect(reserved()).toContain(handle);
+  });
+});

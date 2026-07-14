@@ -166,9 +166,18 @@ export const scaffoldCraft = async (
   const project = knobs['projectName'] ?? projectNameFrom(root);
   const step = (message: string) => context.onStep?.(message);
 
-  // Creating a project on top of someone's files is the one mistake that cannot be undone by
-  // anything in this codebase. Refuse, rather than merge into whatever is there.
-  const existing = (await listDir(root)).filter((name) => !name.startsWith('.'));
+  /**
+   * Creating a project on top of someone's files is the one mistake that cannot be undone by
+   * anything in this codebase. Refuse, rather than merge into whatever is there.
+   *
+   * LuminX's own files are the exception, and not a grudging one: `luminx import` writes the config
+   * *before* the CMS exists, and standing a CMS up to hold that model is the entire point of the
+   * next command. A directory holding nothing but a `luminx.config.json` is not "someone's project"
+   * — it is this project, one step in.
+   */
+  const existing = (await listDir(root)).filter(
+    (name) => !name.startsWith('.') && !name.startsWith('luminx.'),
+  );
   if (existing.length > 0) {
     return err(
       luminxError(ErrorCode.EnvRunnerNotFound, `${root} is not empty`, {
@@ -255,8 +264,9 @@ export const scaffoldCraft = async (
   if (installed !== null) return err(installed);
 
   /**
-   * The plugin is how the CLI talks to Craft at all. Until it is on Packagist, a local checkout is
-   * the only way in.
+   * The plugin is how the CLI talks to Craft at all. It comes from Packagist by default; a local
+   * checkout (--plugin-path) is for working on the plugin itself, or for pinning to an unreleased
+   * one.
    *
    * **A path the container cannot see is not a path.** Composer runs inside DDEV, which mounts the
    * project directory and nothing else, so an absolute host path — the intuitively "safer" choice,
@@ -307,12 +317,12 @@ export const scaffoldCraft = async (
   );
 
   if (required.code !== 0) {
+    // Composer knows why it failed, and we do not. Guessing on its behalf — this hint used to say
+    // "not published yet", which stopped being true the day it was published — sends people to fix
+    // the wrong thing. Show what Composer actually said.
     return err(
       luminxError(ErrorCode.EnvPluginMissing, `Could not install ${PLUGIN_PACKAGE}`, {
-        hint:
-          pluginPath === undefined
-            ? `${PLUGIN_PACKAGE} is not published yet. Point at a local checkout: --plugin-path <path to packages/craft-plugin>`
-            : (required.stderr.trim() || required.stdout.trim()).split('\n').slice(-3).join('\n'),
+        hint: (required.stderr.trim() || required.stdout.trim()).split('\n').slice(-3).join('\n'),
       }),
     );
   }

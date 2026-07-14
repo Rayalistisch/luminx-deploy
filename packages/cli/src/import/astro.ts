@@ -96,7 +96,24 @@ const propertyName = (property: ts.PropertyAssignment): string => {
 /** Drops a trailing plural `s` for a nested object's entry-type handle: relatedLinks → relatedLink. */
 const singular = (handle: string): string => (handle.endsWith('s') ? handle.slice(0, -1) : handle);
 
-const mapField = (fieldHandle: string, expr: ts.Expression): Mapped => {
+/**
+ * What the target CMS will not let a field be called, and who is asking.
+ *
+ * The importer stays CMS-neutral: it is handed the reserved handles rather than knowing them. The
+ * CLI reads them off the adapter's capabilities, so a second CMS brings its own list and this file
+ * does not change.
+ */
+interface Naming {
+  /** The entry type these fields belong to — used to rename a handle the CMS has taken. */
+  readonly owner: string;
+  readonly reserved: ReadonlySet<string>;
+}
+
+/** `author` on `blog` → `blogAuthor`. Predictable, collision-free, and the config is yours to edit. */
+const renamed = (owner: string, handle: string): string =>
+  `${owner}${handle.charAt(0).toUpperCase()}${handle.slice(1)}`;
+
+const mapField = (fieldHandle: string, expr: ts.Expression, naming: Naming): Mapped => {
   const peeled = peel(expr);
 
   if (peeled === null) {
@@ -148,9 +165,9 @@ const mapField = (fieldHandle: string, expr: ts.Expression): Mapped => {
           );
     }
     case 'array':
-      return mapArray(fieldHandle, peeled.base, required, expr);
+      return mapArray(fieldHandle, peeled.base, required, expr, naming);
     case 'object':
-      return mapObject(fieldHandle, peeled.base, required, expr);
+      return mapObject(fieldHandle, peeled.base, required, expr, naming);
     default:
       return {
         ...field(rawBody(expr), required),
@@ -173,8 +190,23 @@ const rawBody = (expr: ts.Expression): FieldBody => ({
 });
 
 /** An object literal's properties, mapped to fields, with any deeper entry types it produced. */
+/**
+ * What every entry already is, before it has a single field of its own — the shape `LuminxEntry`
+ * promises in the generated types (packages/codegen/src/types.ts).
+ *
+ * An Astro schema declares `title` because frontmatter has nowhere else to put one. A CMS entry has
+ * one already, and Craft will not let you add a second: `handle: “title” is a reserved word`. We
+ * used to emit the field anyway, which meant the flagship flow — import an Astro blog, stand a CMS
+ * behind it — died mid-apply on the most ordinary schema anyone could write. Nearly every Astro
+ * blog on earth begins `title: z.string()`.
+ *
+ * So these map onto what the entry already has, and we say so rather than dropping them in silence.
+ */
+const BUILT_IN_ENTRY_FIELDS = new Set(['id', 'title', 'slug', 'uri']);
+
 const fieldsOf = (
   shape: ts.ObjectLiteralExpression,
+  naming: Naming,
 ): {
   fields: FieldEntryOut[];
   entryTypes: Record<string, { fields: FieldEntryOut[] }>;
@@ -187,9 +219,30 @@ const fieldsOf = (
   for (const property of shape.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     const name = propertyName(property);
-    const mapped = mapField(name, property.initializer);
 
-    fields.push({ handle: name, required: mapped.required, body: mapped.body });
+    if (BUILT_IN_ENTRY_FIELDS.has(name)) {
+      notes.push(`"${name}": every entry has one already, so it stays the entry's own ${name}.`);
+      continue;
+    }
+
+    const mapped = mapField(name, property.initializer, naming);
+
+    /**
+     * A handle the CMS keeps for itself. Craft reserves `author`, `type`, `section`, `postDate` and
+     * a few more on every entry — and `author: z.string()` is in half the Astro blogs there are.
+     *
+     * Renaming is lossy, so it is reported, and the config is a file the user owns: if `blogAuthor`
+     * reads badly, they change it. The alternative — emitting the field as written — produced a
+     * config that scaffolded a CMS and then died on the ninth write, which is the worst of both.
+     */
+    const handle = naming.reserved.has(name) ? renamed(naming.owner, name) : name;
+    if (handle !== name) {
+      notes.push(
+        `"${name}": the CMS keeps this handle for itself, so it is imported as "${handle}".`,
+      );
+    }
+
+    fields.push({ handle, required: mapped.required, body: mapped.body });
     Object.assign(entryTypes, mapped.entryTypes);
     notes.push(...mapped.notes);
   }
@@ -204,8 +257,11 @@ const matrix = (
   required: boolean,
   extra: { minEntries?: number; maxEntries?: number },
   note: (count: number) => string,
+  naming: Naming,
 ): Mapped => {
-  const inner = fieldsOf(shape);
+  // A matrix block is an entry type too, so the same handles are off limits inside it — and the
+  // block, not the section, is what a renamed field there belongs to.
+  const inner = fieldsOf(shape, { owner: entryTypeHandle, reserved: naming.reserved });
 
   return {
     body: {
@@ -224,6 +280,7 @@ const mapArray = (
   call: ts.CallExpression,
   required: boolean,
   original: ts.Expression,
+  naming: Naming,
 ): Mapped => {
   const inner = call.arguments[0];
   const innerPeeled = inner === undefined ? null : peel(inner);
@@ -244,6 +301,7 @@ const mapArray = (
       {},
       (count) =>
         `"${fieldHandle}": an array of objects became a matrix with entry type "${entryTypeHandle}" (${count} field(s)).`,
+      naming,
     );
   }
 
@@ -259,6 +317,7 @@ const mapObject = (
   call: ts.CallExpression,
   required: boolean,
   original: ts.Expression,
+  naming: Naming,
 ): Mapped => {
   const shape = call.arguments[0];
   if (shape === undefined || !ts.isObjectLiteralExpression(shape)) {
@@ -275,6 +334,7 @@ const mapObject = (
     required,
     { minEntries: 1, maxEntries: 1 },
     () => `"${fieldHandle}": a nested object became a single-entry matrix "${fieldHandle}".`,
+    naming,
   );
 };
 
@@ -354,7 +414,10 @@ const collectionSchemas = (source: ts.SourceFile): Map<string, ts.ObjectLiteralE
 export const importAstroContent = (
   source: string,
   cms = 'craft',
+  /** The handles the target CMS keeps for itself, from its adapter's capabilities. */
+  reservedHandles: Iterable<string> = [],
 ): Result<ImportResult, readonly LuminxError[]> => {
+  const reserved = new Set(reservedHandles);
   const sourceFile = ts.createSourceFile('content.config.ts', source, ts.ScriptTarget.Latest, true);
   const collections = collectionSchemas(sourceFile);
 
@@ -371,7 +434,7 @@ export const importAstroContent = (
   const notes: string[] = [];
 
   for (const [name, shape] of [...collections].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    const collected = fieldsOf(shape);
+    const collected = fieldsOf(shape, { owner: name, reserved });
 
     for (const [handle, entryType] of Object.entries(collected.entryTypes)) {
       entryTypes[handle] = { fields: entryType.fields.map(toConfigField) };

@@ -47,14 +47,14 @@ describe('scalar fields', () => {
   it('maps the Zod scalars, and compiles', () => {
     const { config } = imports(
       collection(`
-        title: z.string(),
+        heading: z.string(),
         count: z.number(),
         featured: z.boolean(),
         publishedAt: z.date(),
       `),
     );
 
-    expect(fieldSpec(config, 'blog', 'title')['type']).toBe('text');
+    expect(fieldSpec(config, 'blog', 'heading')['type']).toBe('text');
     expect(fieldSpec(config, 'blog', 'count')['type']).toBe('number');
     expect(fieldSpec(config, 'blog', 'featured')['type']).toBe('boolean');
     expect(fieldSpec(config, 'blog', 'publishedAt')['type']).toBe('date');
@@ -89,17 +89,105 @@ describe('required is read from the Zod modifiers', () => {
   it('is required by default, and not when made optional or given a default', () => {
     const { config } = imports(
       collection(`
-        title: z.string(),
+        heading: z.string(),
         subtitle: z.string().optional(),
         author: z.string().default('Anon'),
         note: z.string().nullable(),
       `),
     );
 
-    expect(fieldSpec(config, 'blog', 'title')['required']).toBe(true);
+    expect(fieldSpec(config, 'blog', 'heading')['required']).toBe(true);
     expect(fieldSpec(config, 'blog', 'subtitle')['required']).toBeUndefined();
     expect(fieldSpec(config, 'blog', 'author')['required']).toBeUndefined();
     expect(fieldSpec(config, 'blog', 'note')['required']).toBeUndefined();
+  });
+});
+
+/**
+ * The bug that killed the flagship flow, and the test that keeps it dead.
+ *
+ * Every Astro blog begins `title: z.string()`. An entry already has a title, and Craft refuses a
+ * field that shadows it — so `import` produced a config that scaffolded a CMS, wrote eight
+ * resources, and then died on `handle: "title" is a reserved word`. Found by running the real
+ * cyan-crater schema through a real Craft, which is the only place it could have been found.
+ */
+describe('the fields an entry already has', () => {
+  it('does not emit a field for title, and says where it went', () => {
+    const { config, notes } = imports(collection('title: z.string(), heading: z.string(),'));
+
+    expect(fieldSpec(config, 'blog', 'title')).toEqual({});
+    expect(fieldSpec(config, 'blog', 'heading')['type']).toBe('text');
+    expect(notes.some((note) => note.includes('title'))).toBe(true);
+
+    compiles(config);
+  });
+
+  it('leaves id, slug and uri to the entry too', () => {
+    const { config } = imports(
+      collection('id: z.string(), slug: z.string(), uri: z.string(), body: z.string(),'),
+    );
+
+    const handles = (
+      config as unknown as { entryTypes: Record<string, { fields: { handle: string }[] }> }
+    ).entryTypes['blog']?.fields.map((field) => field.handle);
+
+    expect(handles).toEqual(['body']);
+  });
+
+  // Craft's matrix blocks are entries as well, so `title` is no more allowed inside one.
+  it('applies inside a matrix block, which is an entry as well', () => {
+    const { config } = imports(
+      collection('blocks: z.array(z.object({ title: z.string(), body: z.string() })),'),
+    );
+
+    const handles = (
+      config as unknown as { entryTypes: Record<string, { fields: { handle: string }[] }> }
+    ).entryTypes['block']?.fields.map((field) => field.handle);
+
+    expect(handles).toEqual(['body']);
+    compiles(config);
+  });
+});
+
+/**
+ * The handles the CMS keeps for itself — the second half of the same real failure.
+ *
+ * Craft reserves `author`, `section`, `type` and `postDate` on every entry (EntryType::validate),
+ * on top of the element-wide list. `author: z.string()` is in half the Astro blogs there are, and
+ * importing it as written produced a config that scaffolded a CMS and died on the ninth write.
+ * The importer knows no CMS: it renames what the adapter tells it to rename.
+ */
+describe('handles the CMS keeps for itself', () => {
+  const withReserved = (schema: string, reserved: string[]) => {
+    const result = importAstroContent(schema, 'craft', reserved);
+    if (!result.ok) throw new Error(`import failed: ${JSON.stringify(result.error)}`);
+    return result.value;
+  };
+
+  it('renames a reserved handle after its entry type, and says so', () => {
+    const { config, notes } = withReserved(collection('author: z.string(), body: z.string(),'), [
+      'author',
+    ]);
+
+    expect(fieldSpec(config, 'blog', 'blogAuthor')['type']).toBe('text');
+    expect(fieldSpec(config, 'blog', 'author')).toEqual({});
+    expect(notes.some((note) => note.includes('author') && note.includes('blogAuthor'))).toBe(true);
+    compiles(config);
+  });
+
+  it('renames inside a matrix block after the block, not the section', () => {
+    const { config } = withReserved(
+      collection('links: z.array(z.object({ type: z.string(), href: z.string() })),'),
+      ['type'],
+    );
+
+    expect(fieldSpec(config, 'link', 'linkType')['type']).toBe('text');
+    compiles(config);
+  });
+
+  it('leaves a handle alone when the CMS does not reserve it', () => {
+    const { config } = withReserved(collection('author: z.string(),'), []);
+    expect(fieldSpec(config, 'blog', 'author')['type']).toBe('text');
   });
 });
 
@@ -220,16 +308,20 @@ describe('a real Astro schema (cyan-crater)', () => {
     export const collections = { blog };
   `;
 
-  it('maps every field and compiles to twelve resources', () => {
+  it('maps every field and compiles', () => {
     const { config, notes } = imports(real);
     const model = compiles(config);
 
-    expect(model.model.resources.size).toBe(12);
+    // Eleven, not twelve: `title` is the entry's own, so it is not a field of its own.
+    expect(model.model.resources.size).toBe(11);
+    expect(fieldSpec(config, 'blog', 'title')).toEqual({});
     expect(fieldSpec(config, 'blog', 'pubDate')['type']).toBe('date');
     expect(fieldSpec(config, 'blog', 'category')['required']).toBeUndefined();
     expect(fieldSpec(config, 'blog', 'relatedLinks')['type']).toBe('matrix');
     expect(fieldSpec(config, 'relatedLink', 'href')['type']).toBe('text');
-    expect(notes).toHaveLength(1);
+
+    // Both reshapings are reported: the title, and the matrix.
+    expect(notes).toHaveLength(2);
   });
 
   it('is deterministic', () => {
