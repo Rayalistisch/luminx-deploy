@@ -56,6 +56,9 @@ importers:
       '@luminx/shared':
         specifier: workspace:*
         version: link:../shared
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/codegen:
     dependencies:

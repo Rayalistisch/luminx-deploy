@@ -21,6 +21,7 @@ import type { Io } from './io.js';
 import { paint } from './render.js';
 import { runDoctor } from './commands/doctor.js';
 import { runGenerate } from './commands/generate.js';
+import { runImport } from './commands/import.js';
 import { runInit } from './commands/init.js';
 import { runNew } from './commands/new.js';
 import { runPlan } from './commands/plan.js';
@@ -74,6 +75,7 @@ Usage
 
 Commands
   new                  Create a CMS project from nothing, and apply a starter model.
+  import               Read a frontend's content model into a config (Astro today).
   init                 Write a minimal luminx.config.json. Never touches the CMS.
   doctor               Check the environment and the config. Never mutates.
   generate             Bring the CMS up to date. --dry-run to see it first.
@@ -100,6 +102,7 @@ Options
   --id <id>            undo: restore a particular snapshot
   --force              init: overwrite an existing config
   --from-existing      init: write the config from a CMS that already has a model
+  --from <path>        import: the frontend's content schema (default: src/content/config.ts)
   --cms <id>           init/new: which CMS (default: craft)
   --site-name <name>   init/new: skip the prompt
   --admin-email <a>    new: admin address
@@ -136,6 +139,7 @@ export interface ParsedCli {
   readonly php: string | undefined;
   readonly database: string | undefined;
   readonly pluginPath: string | undefined;
+  readonly from: string | undefined;
   readonly help: boolean;
   readonly version: boolean;
 }
@@ -173,6 +177,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         php: { type: 'string' },
         database: { type: 'string' },
         'plugin-path': { type: 'string' },
+        from: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', short: 'v', default: false },
       },
@@ -218,6 +223,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     php: values.php,
     database: values.database,
     pluginPath: values['plugin-path'],
+    from: values.from,
     help: values.help ?? false,
     version: values.version ?? false,
   };
@@ -276,6 +282,15 @@ export const runCommand = async (
     : undefined;
 
   switch (parsed.command) {
+    case 'import':
+      return runImport(io, {
+        root,
+        configPath,
+        cms: parsed.cms ?? 'craft',
+        force: parsed.force,
+        from: parsed.from,
+      });
+
     case 'new': {
       const knobs: Record<string, string> = {};
       if (parsed.php !== undefined) knobs['php'] = parsed.php;

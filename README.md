@@ -34,6 +34,7 @@ config against the same CMS always produces the same plan — that determinism i
 | Command | What it does |
 |---|---|
 | `luminx new` | Create a CMS project from nothing — DDEV, Craft, the plugin — and apply a starter model. |
+| `luminx import` | Read a frontend's content model (Astro today) into a config. |
 | `luminx init` | Write a minimal config. `--from-existing` writes one from a CMS that already has a model. |
 | `luminx doctor` | Check the environment and the config. Never mutates. |
 | `luminx generate` | Bring the CMS up to the config. `--dry-run` shows the plan and writes nothing. |
@@ -58,6 +59,21 @@ exactly the pain DDEV removes.
 
 Until `craft-luminx` is published, point at a local checkout:
 `npx luminx new --plugin-path ../luminx/packages/craft-plugin`
+
+## From a frontend you already built
+
+If the site exists — an Astro project with content collections — LuminX can read its content model
+and stand a matching CMS behind it:
+
+```bash
+npx luminx import                     # src/content/config.ts (Zod) → luminx.config.json
+npx luminx new                        # a Craft with that model
+```
+
+`import` reads the Zod schema with a real TypeScript parser and reports every decision it made: a
+Zod schema is richer than any CMS model, so an array of objects becomes a matrix, and anything with
+no faithful home becomes a `raw` field rather than being guessed at or dropped. It writes one file,
+`luminx.config.json`, and never touches your frontend's source.
 
 ## A first run on a CMS you already have
 
