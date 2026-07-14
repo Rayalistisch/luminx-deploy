@@ -48,12 +48,14 @@ describe('capabilitiesFor', () => {
     );
   });
 
-  // Craft has no navigation in core (§9.4).
-  it('offers navigation only where a provider is installed', () => {
+  // This test used to assert the opposite, and in doing so it guarded a bug: the adapter claimed
+  // navigation whenever the provider was installed, and no NavigationGenerator has ever existed.
+  // A capability the plugin cannot deliver dies mid-apply, which is what capabilities are for.
+  it('never claims navigation, installed provider or not, because there is no generator', () => {
     expect(capabilitiesFor(facts()).resourceKinds).not.toContain('navigation');
-    expect(capabilitiesFor(facts({ 'verbb/navigation': '3.0.1' })).resourceKinds).toContain(
-      'navigation',
-    );
+    expect(
+      capabilitiesFor(facts({ 'verbb/navigation': '4.0.0-beta.3' })).resourceKinds,
+    ).not.toContain('navigation');
   });
 
   it('always offers the raw escape hatch', () => {

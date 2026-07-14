@@ -844,6 +844,14 @@ Vastgelegd op 2026-07-09, vóór M1. Elke regel hieronder stuurt types die in `s
 
 4. **`generate` en `sync` zijn aparte commando's met een gedeelde pijplijn.** `generate` is additief, `sync` verzoent en kent `--prune` en `--check`. Verschillende houdingen verdienen verschillende namen; destructief gedrag mag nooit één vergeten flag verwijderd zijn van additief gedrag (§8.2).
 
-5. **Navigation komt in v1, gemarkeerd als `experimental`.** De feature is bijzaak; het provider-patroon is de hoofdzaak. Het is het referentievoorbeeld voor optionele, plugin-backed generators en dus het model voor SEOmatic, Neo, Super Table en Vizy (§9.4). Dat patroon bewijs je vroeg of je betaalt er later voor.
+5. **Navigation komt níét in v1.** ~~Komt in v1, gemarkeerd als `experimental`.~~ Herzien op 2026-07-14, nadat de beslissing een bug bleek te dekken.
+
+   De adapter claimde `navigation` zodra `verbb/navigation` geïnstalleerd was, maar er is nooit een `NavigationGenerator` geschreven. Gevolg: een config met `navigation` kwam door de validatie, kreeg een plan, kreeg een snapshot, en sneuvelde daarna hálverwege de apply op *"no generator for this resource kind"* — precies het faalgedrag dat `capabilities` moet uitsluiten (§7.1). Geen enkele test ving het, omdat geen enkele test de provider installeert.
+
+   Bovendien: de enige Craft 5-release van de provider is `4.0.0-beta.3`. Een generator bouwen tegen een beta-API van derden breekt zodra zij hem vóór 4.0 stable wijzigen.
+
+   Een config die om `navigation` vraagt faalt nu met `LX1007` vóórdat er iets geschreven wordt. Zodra er een stabiele provider is, komt de generator in de plugin en volgt de capability. Het provider-patroon zelf blijft de hoofdzaak — het model voor SEOmatic, Neo, Super Table en Vizy (§9.4) — maar het wordt bewezen op een stabiele provider, niet op een beta.
+
+   De les die breder geldt dan navigatie: de capability-lijst (TypeScript) en de generator-registry (PHP) waren twee losse lijsten in twee talen die uit elkaar konden lopen, en dat deden ze. `capabilities.test.ts` leest nu de PHP-bron en houdt ze tegen elkaar aan, zodat deze klasse fouten niet kan terugkeren.
 
 6. **MIT voor alles wat nu bestaat.** Herlicentiëren is alleen pijnlijk voor bestaande code met contributors. `@luminx/deploy` bestaat nog niet en kan straks als nieuw pakket onder een eigen licentie uitkomen zonder iemands toestemming. Voorwaarde blijft §11.3: de open-source CLI is volledig bruikbaar zonder `deploy`.

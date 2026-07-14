@@ -29,8 +29,22 @@ const CMS_PACKAGE = 'craftcms/cms';
 const PLUGIN_PACKAGE = 'luminx/craft-luminx';
 /** Rich text is a first-party plugin, not core. Without it, `richtext` cannot be expressed. */
 const RICHTEXT_PACKAGE = 'craftcms/ckeditor';
-/** Craft has no navigation in core. The generator is provider-backed (§9.4). */
-const NAVIGATION_PACKAGE = 'verbb/navigation';
+/**
+ * **Navigation is not supported.** Craft has no navigation in core; it needs a provider plugin
+ * (`verbb/navigation`, §9.4), and §15 decision 5 planned it as the reference example for optional,
+ * plugin-backed generators. It is not shipped, for two reasons that compound:
+ *
+ * - There is no NavigationGenerator in the plugin. This adapter claimed the capability anyway
+ *   whenever the provider was installed, which meant a config using `navigation` would validate,
+ *   plan, take a snapshot, and then die mid-apply on "no generator for this resource kind" —
+ *   precisely the failure capabilities exist to prevent (§7.1). No test caught it, because no test
+ *   installs the provider. `capabilities.test.ts` now holds the two lists to each other.
+ * - The only Craft 5 release of the provider is `4.0.0-beta.3`. A generator built against a
+ *   third-party beta API breaks when they change it before 4.0 stable.
+ *
+ * A config asking for `navigation` against Craft now fails with LX1007 before anything is written.
+ * When a stable provider lands, the generator goes in the plugin and the capability follows.
+ */
 
 const stripLeadingV = (version: string): string => version.replace(/^v/, '');
 
@@ -172,10 +186,10 @@ export const capabilitiesFor = (facts: ProjectFacts): Capabilities => {
   return {
     fieldTypes:
       installed(facts, RICHTEXT_PACKAGE) === null ? fieldTypes : [...fieldTypes, 'richtext'],
-    resourceKinds:
-      installed(facts, NAVIGATION_PACKAGE) === null
-        ? resourceKinds
-        : [...resourceKinds, 'navigation'],
+    // `navigation` is deliberately absent, even where verbb/navigation is installed. See
+    // NAVIGATION_PACKAGE above: there is no generator for it, and a capability the plugin cannot
+    // deliver fails halfway through an apply — the one thing capabilities exist to prevent (§7.1).
+    resourceKinds,
     reservedFieldHandles: RESERVED_FIELD_HANDLES,
   };
 };
