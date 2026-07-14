@@ -1,6 +1,7 @@
 {
   "name": "@luminx/parsers",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "description": "Deterministic readers for composer.json, .env, package.json, DDEV config. No inference.",
   "license": "MIT",
@@ -20,9 +21,6 @@
   },
   "dependencies": {
     "@luminx/shared": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "repository": {
     "type": "git",

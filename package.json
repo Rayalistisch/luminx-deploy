@@ -28,6 +28,7 @@
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.0.0",
+    "esbuild": "^0.28.1",
     "prettier": "^3.9.4",
     "turbo": "^2.10.4",
     "typescript": "^6.0.3",

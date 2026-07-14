@@ -6,7 +6,6 @@
  * the user installs and the last one they benefit from.
  */
 
-import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -29,8 +28,18 @@ import { runSync } from './commands/sync.js';
 import { runTypes } from './commands/types.js';
 import { runUndo } from './commands/undo.js';
 
-const require = createRequire(import.meta.url);
-const { version } = require('../package.json') as { version: string };
+/**
+ * The version is a build-time fact, so it is baked in at build time (see build.js).
+ *
+ * Reading it from `../package.json` at runtime worked only because of where the compiled file
+ * happened to sit. Bundled into `dist/bin/`, the same relative path points at nothing, and the
+ * binary died on startup — for everyone but us. A constant cannot move out from under itself.
+ *
+ * Undeclared under vitest, which runs the source rather than the bundle; `typeof` on an undeclared
+ * name is safe, and the fallback keeps `--version` semver-shaped in dev.
+ */
+declare const __LUMINX_VERSION__: string | undefined;
+const version = typeof __LUMINX_VERSION__ === 'string' ? __LUMINX_VERSION__ : '0.0.0';
 
 const DEFAULT_CONFIG = 'luminx.config.json';
 const DEFAULT_LOCKFILE = 'luminx.lock.json';

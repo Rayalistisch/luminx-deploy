@@ -1,6 +1,7 @@
 {
   "name": "@luminx/shared",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "description": "Types, intermediate representation, wire protocol and error codes. Zero dependencies.",
   "license": "MIT",
@@ -17,9 +18,6 @@
   ],
   "scripts": {
     "build": "tsc -b"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "repository": {
     "type": "git",

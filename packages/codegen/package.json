@@ -1,6 +1,7 @@
 {
   "name": "@luminx/codegen",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "description": "The content model, projected into TypeScript. One source of truth for the CMS and the frontend.",
   "license": "MIT",
@@ -20,9 +21,6 @@
   },
   "dependencies": {
     "@luminx/shared": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "repository": {
     "type": "git",
