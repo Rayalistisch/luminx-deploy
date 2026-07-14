@@ -1,7 +1,6 @@
 {
   "name": "@luminx/adapter-craft",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "CmsAdapter implementation for Craft CMS 5. Speaks the wire protocol to the craft-luminx plugin.",
   "license": "MIT",
@@ -22,5 +21,15 @@
   "dependencies": {
     "@luminx/core": "workspace:*",
     "@luminx/shared": "workspace:*"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rayalistisch/luminx-deploy.git",
+    "directory": "packages/adapter-craft"
+  },
+  "homepage": "https://github.com/Rayalistisch/luminx-deploy#readme",
+  "bugs": "https://github.com/Rayalistisch/luminx-deploy/issues"
 }

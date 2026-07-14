@@ -1,7 +1,6 @@
 {
   "name": "@luminx/shared",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Types, intermediate representation, wire protocol and error codes. Zero dependencies.",
   "license": "MIT",
@@ -18,5 +17,15 @@
   ],
   "scripts": {
     "build": "tsc -b"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rayalistisch/luminx-deploy.git",
+    "directory": "packages/shared"
+  },
+  "homepage": "https://github.com/Rayalistisch/luminx-deploy#readme",
+  "bugs": "https://github.com/Rayalistisch/luminx-deploy/issues"
 }

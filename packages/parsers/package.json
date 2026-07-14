@@ -1,7 +1,6 @@
 {
   "name": "@luminx/parsers",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Deterministic readers for composer.json, .env, package.json, DDEV config. No inference.",
   "license": "MIT",
@@ -21,5 +20,15 @@
   },
   "dependencies": {
     "@luminx/shared": "workspace:*"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rayalistisch/luminx-deploy.git",
+    "directory": "packages/parsers"
+  },
+  "homepage": "https://github.com/Rayalistisch/luminx-deploy#readme",
+  "bugs": "https://github.com/Rayalistisch/luminx-deploy/issues"
 }
