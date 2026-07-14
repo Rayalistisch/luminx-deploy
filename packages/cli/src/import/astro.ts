@@ -22,6 +22,8 @@ import { ErrorCode, err, luminxError, ok } from '@luminx/shared';
 import type { LuminxError, Result } from '@luminx/shared';
 import type { FieldBody, LuminxConfig } from '@luminx/core';
 
+import { renamed } from '../naming.js';
+
 export interface ImportResult {
   readonly config: LuminxConfig;
   /** Every decision that reshaped or dropped something, so the migration is legible. */
@@ -96,6 +98,9 @@ const propertyName = (property: ts.PropertyAssignment): string => {
 /** Drops a trailing plural `s` for a nested object's entry-type handle: relatedLinks → relatedLink. */
 const singular = (handle: string): string => (handle.endsWith('s') ? handle.slice(0, -1) : handle);
 
+/** Where the markdown goes. `luminx content push` writes each file's body to this handle. */
+export const BODY_HANDLE = 'body';
+
 /**
  * What the target CMS will not let a field be called, and who is asking.
  *
@@ -108,10 +113,6 @@ interface Naming {
   readonly owner: string;
   readonly reserved: ReadonlySet<string>;
 }
-
-/** `author` on `blog` → `blogAuthor`. Predictable, collision-free, and the config is yours to edit. */
-const renamed = (owner: string, handle: string): string =>
-  `${owner}${handle.charAt(0).toUpperCase()}${handle.slice(1)}`;
 
 const mapField = (fieldHandle: string, expr: ts.Expression, naming: Naming): Mapped => {
   const peeled = peel(expr);
@@ -338,23 +339,47 @@ const mapObject = (
   );
 };
 
-/** Resolves `export const collections = { blog }` to each collection's `defineCollection` call. */
-const collectionSchemas = (source: ts.SourceFile): Map<string, ts.ObjectLiteralExpression> => {
-  const defineCalls = new Map<string, ts.ObjectLiteralExpression>(); // variable name → schema object
-  const result = new Map<string, ts.ObjectLiteralExpression>(); // collection name → schema object
+/**
+ * A collection: its frontmatter shape, and whether its files carry a body.
+ *
+ * The Zod schema describes the frontmatter and *only* the frontmatter. The markdown underneath it —
+ * the article — is not in the schema at all, because Astro does not put it there. Import the schema
+ * alone and you get a CMS with nowhere to put the writing. So a `type: 'content'` collection (the
+ * default; `'data'` is the exception) gets a body field the schema never mentioned.
+ */
+interface Collection {
+  readonly shape: ts.ObjectLiteralExpression;
+  readonly hasBody: boolean;
+}
 
-  const schemaOf = (call: ts.CallExpression): ts.ObjectLiteralExpression | null => {
+/** Resolves `export const collections = { blog }` to each collection's `defineCollection` call. */
+const collectionSchemas = (source: ts.SourceFile): Map<string, Collection> => {
+  const defineCalls = new Map<string, Collection>(); // variable name → collection
+  const result = new Map<string, Collection>(); // collection name → collection
+
+  const schemaOf = (call: ts.CallExpression): Collection | null => {
     const config = call.arguments[0];
     if (config === undefined || !ts.isObjectLiteralExpression(config)) return null;
 
+    let shape: ts.ObjectLiteralExpression | null = null;
+    let hasBody = true; // Astro's default is a content collection.
+
     for (const property of config.properties) {
-      if (ts.isPropertyAssignment(property) && propertyName(property) === 'schema') {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const name = propertyName(property);
+
+      if (name === 'schema') {
         const schema = peel(property.initializer);
-        const shape = schema?.base.arguments[0];
-        if (shape !== undefined && ts.isObjectLiteralExpression(shape)) return shape;
+        const inner = schema?.base.arguments[0];
+        if (inner !== undefined && ts.isObjectLiteralExpression(inner)) shape = inner;
+      }
+
+      if (name === 'type' && ts.isStringLiteral(property.initializer)) {
+        hasBody = property.initializer.text !== 'data';
       }
     }
-    return null;
+
+    return shape === null ? null : { shape, hasBody };
   };
 
   // First pass: every `const x = defineCollection({...})`.
@@ -433,15 +458,47 @@ export const importAstroContent = (
   const sections: unknown[] = [];
   const notes: string[] = [];
 
-  for (const [name, shape] of [...collections].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    const collected = fieldsOf(shape, { owner: name, reserved });
+  for (const [name, collection] of [...collections].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const collected = fieldsOf(collection.shape, { owner: name, reserved });
 
     for (const [handle, entryType] of Object.entries(collected.entryTypes)) {
       entryTypes[handle] = { fields: entryType.fields.map(toConfigField) };
     }
     notes.push(...collected.notes.map((note) => `${name}: ${note}`));
 
-    entryTypes[name] = { fields: collected.fields.map(toConfigField) };
+    const fields = collected.fields.map(toConfigField);
+
+    /**
+     * The article itself.
+     *
+     * A Zod schema describes the frontmatter; the markdown below it is the thing the site is for,
+     * and it appears in no schema anywhere. Without this the CMS gets every field *about* a post
+     * and nowhere to put the post.
+     *
+     * A plain multiline text field, not richtext: `richtext` exists in Craft only where CKEditor
+     * does, and a CMS `luminx new` just created has no CKEditor. Markdown is text, and text is a
+     * promise every CMS can keep.
+     */
+    if (collection.hasBody) {
+      /**
+       * `body` unless `body` is spoken for.
+       *
+       * A schema is free to declare its own `body` in the frontmatter, and some do — and then two
+       * fields want the same handle and the config does not compile ("field body is defined
+       * twice"). The schema's field is the one the user wrote, so it keeps the name, and the
+       * markdown goes to `blogBody` instead. Same rule as any other taken handle, and
+       * `content push` looks for exactly these two, in this order.
+       */
+      const taken = reserved.has(BODY_HANDLE) || fields.some((f) => f['handle'] === BODY_HANDLE);
+      const handle = taken ? renamed(name, BODY_HANDLE) : BODY_HANDLE;
+
+      fields.push({ handle, type: 'text', name: 'Body', multiline: true });
+      notes.push(
+        `${name}: the markdown body has no place in a Zod schema, so it became "${handle}".`,
+      );
+    }
+
+    entryTypes[name] = { fields };
     sections.push({
       handle: name,
       name: name.charAt(0).toUpperCase() + name.slice(1),

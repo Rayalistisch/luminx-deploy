@@ -135,6 +135,44 @@ export interface CmsAdapter {
     context: ScaffoldContext,
   ) => Promise<Result<ScaffoldResult, LuminxError>>;
 
+  /**
+   * Optional: `luminx content push`. Writes entries — the content, not the model.
+   *
+   * Every other method here reconciles: the config is the truth, and what diverges is corrected.
+   * This one does not, and the asymmetry is the point. Content is written by people, and often
+   * after it was pushed; a markdown file deleted from a repository must not take a published
+   * article — or an editor's morning of work — with it. So this upserts, and never deletes.
+   * Removing an entry stays a decision a human makes in the CMS.
+   */
+  readonly pushContent?: (
+    entries: readonly ContentEntry[],
+    context: AdapterContext,
+  ) => Promise<Result<ContentReport, LuminxError>>;
+
   /** CMS-specific doctor checks, on top of the generic ones. */
   readonly healthChecks: (context: AdapterContext) => Promise<readonly HealthCheck[]>;
+}
+
+/** One entry to write. Matched on `slug` within `section` — the identifier a file and an entry share. */
+export interface ContentEntry {
+  readonly section: string;
+  readonly entryType: string;
+  readonly slug: string;
+  readonly title: string;
+  /** ISO 8601. The CMS decides how to store it. */
+  readonly postDate?: string;
+  /** Field handles to values. A matrix value is a list of `ContentBlock`. */
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+/** A matrix block: which entry type it is, and the fields it carries. */
+export interface ContentBlock {
+  readonly entryType: string;
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+export interface ContentReport {
+  readonly written: readonly { slug: string; status: 'created' | 'updated'; id: number }[];
+  readonly created: number;
+  readonly updated: number;
 }

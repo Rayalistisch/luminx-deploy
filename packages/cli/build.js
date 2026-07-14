@@ -17,6 +17,7 @@
  *                   with no prize.
  *   zod             Ships its own export map and relies on it. A real dependency is the honest way.
  *   jsonc-parser    Small, but there is nothing to gain from inlining it either.
+ *   yaml            Reads the frontmatter of a markdown file. Same story as zod.
  *
  * Everything else — including every node: builtin — esbuild leaves alone under platform 'node'.
  */
@@ -43,7 +44,7 @@ const result = await build({
   // one produces *two*, and Node strips only the first — the second is a syntax error, and the
   // binary does not run at all. Caught by installing the tarball into an empty directory, which is
   // the only test that sees what a stranger sees.
-  external: ['typescript', 'zod', 'jsonc-parser'],
+  external: ['typescript', 'zod', 'jsonc-parser', 'yaml'],
   // The version, baked in. See the note at its use in src/cli.ts.
   define: { __LUMINX_VERSION__: JSON.stringify(version) },
   // Small enough to read when something goes wrong in someone else's terminal.

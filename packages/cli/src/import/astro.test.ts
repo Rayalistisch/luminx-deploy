@@ -1,3 +1,4 @@
+import { capabilitiesFor } from '@luminx/adapter-craft';
 import { compile, validateConfig } from '@luminx/core';
 import { describe, expect, it } from 'vitest';
 
@@ -34,6 +35,12 @@ const compiles = (config: unknown) => {
 
   return compiled.value;
 };
+
+/** Every field handle on an entry type, in order — so a test can assert on what was added. */
+const handlesOf = (config: unknown, entryType: string): string[] =>
+  (
+    config as unknown as { entryTypes: Record<string, { fields: { handle: string }[] }> }
+  ).entryTypes[entryType]?.fields.map((field) => field.handle) ?? [];
 
 /** The field body for a handle inside an entry type, so a test can assert on one mapping. */
 const fieldSpec = (config: unknown, entryType: string, handle: string): Record<string, unknown> => {
@@ -124,28 +131,62 @@ describe('the fields an entry already has', () => {
 
   it('leaves id, slug and uri to the entry too', () => {
     const { config } = imports(
-      collection('id: z.string(), slug: z.string(), uri: z.string(), body: z.string(),'),
+      collection('id: z.string(), slug: z.string(), uri: z.string(), summary: z.string(),'),
     );
 
-    const handles = (
-      config as unknown as { entryTypes: Record<string, { fields: { handle: string }[] }> }
-    ).entryTypes['blog']?.fields.map((field) => field.handle);
-
-    expect(handles).toEqual(['body']);
+    // `body` is the field the importer adds for the markdown; the rest are the entry's own.
+    expect(handlesOf(config, 'blog')).toEqual(['summary', 'body']);
   });
 
   // Craft's matrix blocks are entries as well, so `title` is no more allowed inside one.
   it('applies inside a matrix block, which is an entry as well', () => {
     const { config } = imports(
-      collection('blocks: z.array(z.object({ title: z.string(), body: z.string() })),'),
+      collection('blocks: z.array(z.object({ title: z.string(), text: z.string() })),'),
     );
 
-    const handles = (
-      config as unknown as { entryTypes: Record<string, { fields: { handle: string }[] }> }
-    ).entryTypes['block']?.fields.map((field) => field.handle);
-
-    expect(handles).toEqual(['body']);
+    expect(handlesOf(config, 'block')).toEqual(['text']);
     compiles(config);
+  });
+});
+
+/**
+ * The markdown itself.
+ *
+ * A Zod schema describes the frontmatter and stops there. The article — the reason the site exists —
+ * is the text *below* it, and no schema mentions it. Import the schema alone and the CMS gets every
+ * field about a post and nowhere to put the post.
+ */
+describe('the body the schema never mentions', () => {
+  it('adds a field for the markdown, and says it did', () => {
+    const { config, notes } = imports(collection('description: z.string(),'));
+
+    expect(fieldSpec(config, 'blog', 'body')).toMatchObject({ type: 'text', multiline: true });
+    expect(notes.some((note) => note.includes('markdown body'))).toBe(true);
+    compiles(config);
+  });
+
+  /**
+   * The collision this nearly shipped with.
+   *
+   * A schema may declare its own `body` in the frontmatter, and then two fields want one handle:
+   * `field "body" is defined twice`. The config would not compile at all. The schema's field keeps
+   * the name it was given; the markdown moves aside.
+   */
+  it('moves aside when the schema already has a body of its own', () => {
+    const { config } = imports(collection('body: z.string(), description: z.string(),'));
+
+    expect(handlesOf(config, 'blog')).toEqual(['body', 'description', 'blogBody']);
+    compiles(config);
+  });
+
+  it('adds nothing to a data collection, which has no body', () => {
+    const schema = `
+      import { defineCollection, z } from 'astro:content';
+      const authors = defineCollection({ type: 'data', schema: z.object({ name: z.string() }) });
+      export const collections = { authors };
+    `;
+
+    expect(handlesOf(imports(schema).config, 'authors')).toEqual(['name']);
   });
 });
 
@@ -287,6 +328,28 @@ describe('finding the collections', () => {
  * site's content config is the test that matters: it must map, and it must compile.
  */
 describe('a real Astro schema (cyan-crater)', () => {
+  /**
+   * Craft's real reserved handles, from the real adapter — not a list invented for the test.
+   *
+   * This schema declares `author`, which Craft keeps for itself, and a test that quietly used an
+   * empty reserved list would pass while the real command failed. It did, once: nine resources into
+   * an apply, on a real database.
+   */
+  const craftReserves = capabilitiesFor({
+    root: '/project',
+    composer: { name: 'a/b', phpConstraint: '^8.3', require: {}, installed: {}, lock: 'parsed' },
+    frameworks: [],
+    detectedRunners: [],
+    runner: 'local',
+    envKeys: null,
+  }).reservedFieldHandles;
+
+  const imports = (schema: string) => {
+    const result = importAstroContent(schema, 'craft', craftReserves ?? []);
+    if (!result.ok) throw new Error(`import failed: ${JSON.stringify(result.error)}`);
+    return result.value;
+  };
+
   const real = `
     import { defineCollection, z } from 'astro:content';
     const blog = defineCollection({
@@ -312,16 +375,23 @@ describe('a real Astro schema (cyan-crater)', () => {
     const { config, notes } = imports(real);
     const model = compiles(config);
 
-    // Eleven, not twelve: `title` is the entry's own, so it is not a field of its own.
-    expect(model.model.resources.size).toBe(11);
+    expect(model.model.resources.size).toBe(12);
+
+    // `title` is the entry's own, so it is not a field of its own.
     expect(fieldSpec(config, 'blog', 'title')).toEqual({});
     expect(fieldSpec(config, 'blog', 'pubDate')['type']).toBe('date');
     expect(fieldSpec(config, 'blog', 'category')['required']).toBeUndefined();
     expect(fieldSpec(config, 'blog', 'relatedLinks')['type']).toBe('matrix');
     expect(fieldSpec(config, 'relatedLink', 'href')['type']).toBe('text');
 
-    // Both reshapings are reported: the title, and the matrix.
-    expect(notes).toHaveLength(2);
+    // The article, which the schema never mentions and the site is entirely made of.
+    expect(fieldSpec(config, 'blog', 'body')).toMatchObject({ type: 'text', multiline: true });
+
+    // Craft keeps `author` for itself, so the frontmatter's author moved aside.
+    expect(fieldSpec(config, 'blog', 'blogAuthor')['type']).toBe('text');
+
+    // Every reshaping reported: the title, the author, the matrix, the body.
+    expect(notes).toHaveLength(4);
   });
 
   it('is deterministic', () => {

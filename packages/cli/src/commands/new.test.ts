@@ -37,6 +37,21 @@ const scaffoldable = (): CmsAdapter => ({
   scaffold: () => Promise.resolve(ok({ root: '', version: 'test', notes: [] })),
 });
 
+/** The same, but it remembers the admin it was asked to create. */
+const recording = (): { adapter: CmsAdapter; passwords: string[] } => {
+  const passwords: string[] = [];
+  return {
+    passwords,
+    adapter: {
+      ...createMemoryAdapter(),
+      scaffold: (scaffoldOptions) => {
+        passwords.push(scaffoldOptions.admin.password);
+        return Promise.resolve(ok({ root: '', version: 'test', notes: [] }));
+      },
+    },
+  };
+};
+
 const emptyProject = () => mkdtemp(join(tmpdir(), 'luminx-new-'));
 
 /** What `luminx import` leaves behind: a model, and no CMS yet to hold it. */
@@ -113,6 +128,69 @@ describe('new', () => {
     // And the file itself is untouched.
     const after = JSON.parse(await readFile(configPath, 'utf8')) as { siteName: string };
     expect(after.siteName).toBe('Imported');
+  });
+
+  /**
+   * `--yes` takes every fallback, and the fallback used to be `luminx-change-me` — a password
+   * printed in this repository and installed on every CMS scaffolded non-interactively. Nobody who
+   * typed `--yes` chose that. It is generated now, and shown once, because a password nobody can
+   * read is a CMS nobody can log into.
+   */
+  describe('the admin password', () => {
+    it('is generated, never the one written in this repository', async () => {
+      const { adapter, passwords } = recording();
+      const io = fakeIo();
+
+      await runCommand(
+        parseCli(['new', '--yes', '--cms', 'memory']),
+        io,
+        await emptyProject(),
+        createRegistry([adapter]),
+      );
+
+      const password = passwords[0] ?? '';
+      expect(password).not.toBe('luminx-change-me');
+      expect(password.length).toBeGreaterThanOrEqual(16);
+
+      // Shown once — otherwise we have locked the user out of their own CMS.
+      expect(io.out()).toContain(password);
+    });
+
+    it('differs every run', async () => {
+      const first = recording();
+      const second = recording();
+
+      await runCommand(
+        parseCli(['new', '--yes', '--cms', 'memory']),
+        fakeIo(),
+        await emptyProject(),
+        createRegistry([first.adapter]),
+      );
+      await runCommand(
+        parseCli(['new', '--yes', '--cms', 'memory']),
+        fakeIo(),
+        await emptyProject(),
+        createRegistry([second.adapter]),
+      );
+
+      expect(first.passwords[0]).not.toBe(second.passwords[0]);
+    });
+
+    it('uses the one given, and does not echo it back', async () => {
+      const { adapter, passwords } = recording();
+      const io = fakeIo();
+
+      await runCommand(
+        parseCli(['new', '--yes', '--cms', 'memory', '--admin-password', 'hunter2-hunter2']),
+        io,
+        await emptyProject(),
+        createRegistry([adapter]),
+      );
+
+      expect(passwords[0]).toBe('hunter2-hunter2');
+      // The user already has it; printing it only spills it into logs and scrollback.
+      expect(io.out()).not.toContain('hunter2-hunter2');
+    });
   });
 
   /**

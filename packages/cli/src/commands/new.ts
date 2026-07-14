@@ -10,6 +10,7 @@
  * step of every other day: a `generate` that converges.
  */
 
+import { randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
@@ -121,7 +122,21 @@ export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => 
 
   const siteName = options.siteName ?? (await io.ask('Site name?', basename(options.root)));
   const email = options.adminEmail ?? (await io.ask('Admin email?', 'admin@example.test'));
-  const password = options.adminPassword ?? (await io.ask('Admin password?', 'luminx-change-me'));
+
+  /**
+   * A generated password, not a default one.
+   *
+   * `--yes` takes every fallback, and the fallback here used to be the literal `luminx-change-me` —
+   * a password published in this repository, installed on every CMS anyone scaffolded without
+   * answering a prompt. Behind DDEV that is survivable; the day one of those is reachable it is an
+   * open door, and nobody who typed `--yes` ever decided to leave it open.
+   *
+   * So the fallback is random. It is printed once, at the end, because a password nobody can read
+   * is a CMS nobody can log into.
+   */
+  const suggested = generatePassword();
+  const password = options.adminPassword ?? (await io.ask('Admin password?', suggested));
+  const generated = password === suggested && options.adminPassword === undefined;
 
   io.stdout(
     `\n  Creating a ${paint(io.color, 'bold', options.cms)} project in ${options.root}\n\n`,
@@ -224,8 +239,22 @@ export const runNew = async (io: Io, options: NewOptions): Promise<ExitCode> => 
   );
   for (const note of result.notes) io.stdout(`  ${note}\n`);
 
+  // Shown once, and only when we made it up. Last, so it is the thing still on screen.
+  if (generated) {
+    io.stdout(`  ${paint(io.color, 'bold', 'Password:')} ${password}\n`);
+    io.stdout(`  ${paint(io.color, 'dim', 'Generated for you, and shown once. Save it now.')}\n`);
+  }
+
   return ExitCode.Success;
 };
+
+/**
+ * A password nobody chose, that nobody else can guess.
+ *
+ * `randomBytes`, not `Math.random`: this guards a CMS admin account. base64url keeps it to
+ * characters that survive a shell, a copy-paste and a password manager without escaping.
+ */
+const generatePassword = (): string => randomBytes(18).toString('base64url');
 
 const fail = (io: Io, errors: readonly import('@luminx/shared').LuminxError[]): ExitCode => {
   io.stderr(renderErrors(io.color, errors));

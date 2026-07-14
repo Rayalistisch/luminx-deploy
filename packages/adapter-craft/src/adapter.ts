@@ -6,7 +6,13 @@
  */
 
 import { PROTOCOL_VERSION, ErrorCode, err, luminxError, ok } from '@luminx/shared';
-import type { AdapterContext, Capabilities, CmsAdapter, CmsInfo } from '@luminx/core';
+import type {
+  AdapterContext,
+  Capabilities,
+  CmsAdapter,
+  CmsInfo,
+  ContentReport,
+} from '@luminx/core';
 import type {
   CurrentModel,
   HealthCheck,
@@ -365,6 +371,30 @@ export const createCraftAdapter = (options: CraftAdapterOptions): CmsAdapter => 
       });
 
       return response.ok ? ok(undefined) : response;
+    },
+
+    /**
+     * Entries, in one call.
+     *
+     * `apply` deliberately sends one operation per call — each is a fresh Craft bootstrap, and a
+     * failed write must not take the rest of a plan with it. Content is different: it is the same
+     * kind of write repeated, there is nothing to order and nothing to roll back (this never
+     * deletes), and a hundred posts would otherwise be a hundred Craft boots. So it goes in one.
+     */
+    pushContent: async (entries, context) => {
+      const response = await client(context).call('luminx/content', { entries });
+      if (!response.ok) return response;
+
+      const report = response.value.data as ContentReport | undefined;
+
+      return report === undefined || !Array.isArray(report.written)
+        ? err(
+            luminxError(
+              ErrorCode.ApplyOperationFailed,
+              'The plugin wrote content but reported nothing',
+            ),
+          )
+        : ok(report);
     },
 
     // The one method that runs before Craft exists, so it takes no AdapterContext (§ contract).

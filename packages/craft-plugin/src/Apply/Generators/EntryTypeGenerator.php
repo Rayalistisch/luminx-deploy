@@ -7,6 +7,7 @@ namespace luminx\craft\Apply\Generators;
 use Craft;
 use craft\elements\Entry;
 use craft\fieldlayoutelements\CustomField;
+use craft\fieldlayoutelements\entries\EntryTitleField;
 use craft\models\EntryType;
 use craft\models\FieldLayout;
 use craft\models\FieldLayoutTab;
@@ -56,6 +57,25 @@ final readonly class EntryTypeGenerator implements Generator
     {
         $layout = new FieldLayout(['type' => Entry::class]);
 
+        /**
+         * The title is a layout element, not a setting — and leaving it out silently costs you every
+         * title you write.
+         *
+         * `Entries::saveEntryType()` derives the flag from the layout:
+         *
+         *     $entryType->hasTitleField = $entryType->getFieldLayout()->isFieldIncluded('title');
+         *
+         * A layout of nothing but custom fields therefore turns the title *off*, and an entry type
+         * with no title field ignores the title on every entry saved to it. `luminx content push`
+         * wrote six articles, Craft accepted all six, and every one of them landed with a NULL
+         * title. Nothing failed. That is the worst way for this to go wrong.
+         *
+         * Not mandatory, so a matrix block — an entry type too — is not forced to carry one.
+         * LuminX's own generated types promise `title` on every entry (LuminxEntry); this is what
+         * makes that promise true.
+         */
+        $elements = [new EntryTitleField(['required' => false])];
+
         /** @var array<string, list<CustomField>> $byTab */
         $byTab = [];
 
@@ -72,9 +92,18 @@ final readonly class EntryTypeGenerator implements Generator
         }
 
         $tabs = [];
+        $first = true;
 
-        foreach ($byTab as $name => $elements) {
+        foreach ($byTab as $name => $fields) {
             $tab = new FieldLayoutTab(['name' => $name, 'layout' => $layout]);
+            $tab->setElements($first ? [...$elements, ...$fields] : $fields);
+            $tabs[] = $tab;
+            $first = false;
+        }
+
+        // An entry type with no fields at all still needs somewhere to put its title.
+        if ($tabs === []) {
+            $tab = new FieldLayoutTab(['name' => 'Content', 'layout' => $layout]);
             $tab->setElements($elements);
             $tabs[] = $tab;
         }

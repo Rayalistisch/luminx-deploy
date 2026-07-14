@@ -25,6 +25,7 @@ import { runInit } from './commands/init.js';
 import { runNew } from './commands/new.js';
 import { runPlan } from './commands/plan.js';
 import { runSync } from './commands/sync.js';
+import { runContentPush } from './commands/content.js';
 import { runTypes } from './commands/types.js';
 import { runUndo } from './commands/undo.js';
 
@@ -91,6 +92,7 @@ Commands
   sync                 Reconcile both sides, show drift. --check for CI, --prune to delete.
   plan                 Write the plan as a reviewable artefact. -o to a file.
   types                Emit TypeScript types for your frontend. -o to a file.
+  content push         Write your markdown into the CMS. Upserts on slug; never deletes.
   undo                 Restore the snapshot taken before the last apply.
   deploy               (1.x) Apply a reviewed plan to another environment. See docs/deploy.md.
 
@@ -119,12 +121,16 @@ Options
   --php <version>      new: PHP version (default: 8.3)
   --database <spec>    new: database (default: mysql:8.0)
   --plugin-path <path> new: install craft-luminx from a local checkout
+  --section <handle>   content push: which section to write into
   -h, --help           Show this
   -v, --version        Show the version
 `;
 
 export interface ParsedCli {
   readonly command: string | undefined;
+  /** `luminx content push` — the verb after the noun, for commands that have one. */
+  readonly subcommand: string | undefined;
+  readonly section: string | undefined;
   readonly config: string | undefined;
   readonly lockfile: string | undefined;
   readonly cwd: string | undefined;
@@ -187,6 +193,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         database: { type: 'string' },
         'plugin-path': { type: 'string' },
         from: { type: 'string' },
+        section: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', short: 'v', default: false },
       },
@@ -197,7 +204,17 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
 
   const { values, positionals } = parsed;
 
-  if (positionals.length > 1) {
+  /**
+   * One word, except where the noun needs a verb.
+   *
+   * `content` alone must not do anything — it writes to a database, and a command that guesses at
+   * what you meant is the last thing that should. So `content push` is two words on purpose, and
+   * everything else stays one.
+   */
+  const takesVerb = positionals[0] === 'content';
+  const allowed = takesVerb ? 2 : 1;
+
+  if (positionals.length > allowed) {
     throw new UsageError(`Expected one command, got: ${positionals.join(', ')}`);
   }
 
@@ -209,6 +226,8 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
 
   return {
     command: positionals[0],
+    subcommand: positionals[1],
+    section: values.section,
     config: values.config,
     lockfile: values.lockfile,
     cwd: values.cwd,
@@ -379,6 +398,24 @@ export const runCommand = async (
 
     case 'types':
       return runTypes(io, { configPath, out: parsed.out });
+
+    case 'content': {
+      // `content push` — the verb is required, so a bare `luminx content` cannot write anything.
+      if (parsed.subcommand !== 'push') {
+        throw new UsageError('Usage: luminx content push [--section <handle>] [--from <dir>]');
+      }
+
+      return runContentPush(io, {
+        root,
+        configPath,
+        lockfilePath,
+        from: parsed.from,
+        section: parsed.section,
+        dryRun: parsed.dryRun,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
+    }
 
     case 'plan':
       return runPlan(io, {
