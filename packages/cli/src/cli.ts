@@ -25,6 +25,7 @@ import { runInit } from './commands/init.js';
 import { runNew } from './commands/new.js';
 import { runPlan } from './commands/plan.js';
 import { runSync } from './commands/sync.js';
+import { runClient } from './commands/client.js';
 import { runContentPush } from './commands/content.js';
 import { runTypes } from './commands/types.js';
 import { runUndo } from './commands/undo.js';
@@ -93,6 +94,7 @@ Commands
   plan                 Write the plan as a reviewable artefact. -o to a file.
   types                Emit TypeScript types for your frontend. -o to a file.
   content push         Write your markdown into the CMS. Upserts on slug; never deletes.
+  client               Generate a typed client that reads the CMS. Opens a read-only token.
   undo                 Restore the snapshot taken before the last apply.
   deploy               (1.x) Apply a reviewed plan to another environment. See docs/deploy.md.
 
@@ -122,6 +124,7 @@ Options
   --database <spec>    new: database (default: mysql:8.0)
   --plugin-path <path> new: install craft-luminx from a local checkout
   --section <handle>   content push: which section to write into
+  --env <path>         client: where to write the token (default: .env)
   -h, --help           Show this
   -v, --version        Show the version
 `;
@@ -131,6 +134,7 @@ export interface ParsedCli {
   /** `luminx content push` — the verb after the noun, for commands that have one. */
   readonly subcommand: string | undefined;
   readonly section: string | undefined;
+  readonly env: string | undefined;
   readonly config: string | undefined;
   readonly lockfile: string | undefined;
   readonly cwd: string | undefined;
@@ -194,6 +198,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
         'plugin-path': { type: 'string' },
         from: { type: 'string' },
         section: { type: 'string' },
+        env: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', short: 'v', default: false },
       },
@@ -228,6 +233,7 @@ export const parseCli = (argv: readonly string[]): ParsedCli => {
     command: positionals[0],
     subcommand: positionals[1],
     section: values.section,
+    env: values.env,
     config: values.config,
     lockfile: values.lockfile,
     cwd: values.cwd,
@@ -398,6 +404,16 @@ export const runCommand = async (
 
     case 'types':
       return runTypes(io, { configPath, out: parsed.out });
+
+    case 'client':
+      return runClient(io, {
+        root,
+        configPath,
+        out: parsed.out,
+        envPath: parsed.env,
+        registryFor: registryFor(parsed.runner, verbose),
+        ...(registry === undefined ? {} : { registry }),
+      });
 
     case 'content': {
       // `content push` — the verb is required, so a bare `luminx content` cannot write anything.

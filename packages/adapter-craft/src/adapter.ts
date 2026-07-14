@@ -5,6 +5,9 @@
  * `--dry-run` honest: the plan you are shown is exactly the plan that runs.
  */
 
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
 import { PROTOCOL_VERSION, ErrorCode, err, luminxError, ok } from '@luminx/shared';
 import type {
   AdapterContext,
@@ -175,6 +178,52 @@ const FIELD_RESERVED_HANDLES: readonly string[] = [
   'viewMode',
   'where',
 ];
+
+/** Where Craft will answer GraphQL, once a route says so. */
+const GRAPHQL_ENDPOINT = '/api';
+
+const ROUTES_FILE = 'config/routes.php';
+
+const ROUTES_TEMPLATE = `<?php
+/**
+ * Written by LuminX so the frontend can read this CMS (\`luminx client\`).
+ *
+ * Craft serves GraphQL only where a route points at it. Delete this and the read side goes dark.
+ */
+return [
+    'api' => 'graphql/api',
+];
+`;
+
+/**
+ * Craft answers GraphQL at `/api` once `config/routes.php` sends it there — and not before.
+ *
+ * If the file is not there, we write it. If it *is* there, it is someone's file, and it may hold
+ * routes this project depends on. Rewriting it to add one line is not a trade worth making, and
+ * parsing PHP to edit it in place is worse. So we read it, and if it does not already route to
+ * `graphql/api` we say exactly what to add and stop. A tool that quietly rewrites config it did not
+ * write is a tool nobody can trust with a repository.
+ */
+const ensureGraphqlRoute = async (root: string): Promise<Result<void, LuminxError>> => {
+  const path = join(root, ROUTES_FILE);
+
+  let existing: string;
+  try {
+    existing = await readFile(path, 'utf8');
+  } catch {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, ROUTES_TEMPLATE, 'utf8');
+    return ok(undefined);
+  }
+
+  if (/graphql\/api/.test(existing)) return ok(undefined);
+
+  return err(
+    luminxError(ErrorCode.EnvCmsNotDetected, `${ROUTES_FILE} does not expose GraphQL`, {
+      hint: `Add this to the array it returns, and run again:\n    'api' => 'graphql/api',`,
+    }),
+  );
+};
 
 /** Both lists Craft enforces, as one — see the note above. Sorted, so the capabilities are stable. */
 const RESERVED_FIELD_HANDLES: readonly string[] = [
@@ -395,6 +444,38 @@ export const createCraftAdapter = (options: CraftAdapterOptions): CmsAdapter => 
             ),
           )
         : ok(report);
+    },
+
+    /**
+     * The read side: a scoped schema and a token, plus the route that exposes them.
+     *
+     * The plugin provisions the schema and the token — it is inside Craft, and only it can. But
+     * Craft does not serve GraphQL until a *route* says so, and routes live in `config/routes.php`,
+     * a file in the project. Files are the CLI's business, so that half happens here.
+     */
+    openReadSide: async (context) => {
+      const routed = await ensureGraphqlRoute(context.root);
+      if (!routed.ok) return routed;
+
+      const response = await client(context).call('luminx/client', {});
+      if (!response.ok) return response;
+
+      const data = response.value.data as
+        { token?: string; sections?: readonly string[]; url?: string } | undefined;
+
+      return data?.token === undefined
+        ? err(
+            luminxError(
+              ErrorCode.ApplyOperationFailed,
+              'The plugin opened the read side but returned no token',
+            ),
+          )
+        : ok({
+            // Craft told us where it lives; we only know where it answers.
+            endpoint: `${data.url ?? ''}${GRAPHQL_ENDPOINT}`,
+            token: data.token,
+            sections: data.sections ?? [],
+          });
     },
 
     // The one method that runs before Craft exists, so it takes no AdapterContext (§ contract).

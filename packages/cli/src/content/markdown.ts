@@ -162,8 +162,20 @@ const entryOf = (
   for (const [key, value] of Object.entries(front)) {
     // The entry's own, not a field of it. `title` is the entry's title; the rest Craft owns.
     if (key === 'title' || key === 'slug' || key === 'id' || key === 'uri') continue;
-    if (key === 'pubDate' || key === 'postDate' || key === 'date') continue; // → postDate, below
 
+    /**
+     * A publish date is *both*, and it used to be neither.
+     *
+     * The date becomes the entry's `postDate` (below), because that is the date Craft orders and
+     * publishes by. But the config also declares a `pubDate` field — `import` read it from the Zod
+     * schema, and `luminx types` promises the frontend it exists. This used to `continue` here, so
+     * the field was never written: a required field, empty on every entry, and a frontend reading
+     * `null` where a date belongs. Craft saved it without complaint. Only reading it back through
+     * GraphQL showed it.
+     *
+     * So it falls through: the field is filled *and* the entry's own postDate is set. The
+     * redundancy is the honest answer — one is Craft's, one is the config's, and both were promised.
+     */
     const field = fieldFor(type, key);
 
     if (field === null) {

@@ -16,7 +16,7 @@ const blog: EntryTypeShape = {
     ['description', { type: 'text' }],
     ['blogAuthor', { type: 'text' }],
     ['category', { type: 'text' }],
-    ['pubDateX', { type: 'date' }], // deliberately not `pubDate`: that becomes the entry's postDate
+    ['pubDate', { type: 'date' }], // a field of its own *and* the entry's postDate — see below
     ['body', { type: 'text' }],
     [
       'relatedLinks',
@@ -79,11 +79,19 @@ describe('a markdown file becomes an entry', () => {
     expect(entry.fields['author']).toBeUndefined();
   });
 
-  it('makes pubDate the entry’s own postDate, not a field', () => {
+  /**
+   * The bug that only reading it back could find.
+   *
+   * The date used to become the entry's `postDate` and nothing else — so the `pubDate` field the
+   * config declares (and `luminx types` promises) was never written. A required field, empty on
+   * every entry. Craft saved all six without a word; the frontend would have read `null`. It is
+   * both now: Craft orders by postDate, the frontend reads the field.
+   */
+  it('writes the publish date to the field *and* the entry’s own postDate', () => {
     const entry = one(`---\ntitle: T\npubDate: 2026-02-27T00:00:00.000Z\n---\nBody.`);
 
     expect(entry.postDate).toBe('2026-02-27T00:00:00.000Z');
-    expect(entry.fields['pubDate']).toBeUndefined();
+    expect(entry.fields['pubDate']).toBe('2026-02-27T00:00:00.000Z');
   });
 
   it('does not make a field of the title — an entry already has one', () => {

@@ -19,6 +19,7 @@ export type {
   ContentBlock,
   ContentEntry,
   ContentReport,
+  ReadSide,
   ScaffoldContext,
   ScaffoldOptions,
   ScaffoldResult,

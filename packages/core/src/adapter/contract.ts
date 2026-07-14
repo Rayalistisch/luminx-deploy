@@ -149,6 +149,16 @@ export interface CmsAdapter {
     context: AdapterContext,
   ) => Promise<Result<ContentReport, LuminxError>>;
 
+  /**
+   * Optional: `luminx client`. Opens a read-only way back out of the CMS, and says how to reach it.
+   *
+   * A CMS whose entries no site displays is an archive. This is the door: the adapter provisions
+   * whatever its CMS needs — a scoped schema, a token, an endpoint — and returns the two facts a
+   * frontend needs to read. Read-only, always: a token that could write would, if it ever leaked
+   * out of a frontend's environment, be able to rewrite the content it was meant to show.
+   */
+  readonly openReadSide?: (context: AdapterContext) => Promise<Result<ReadSide, LuminxError>>;
+
   /** CMS-specific doctor checks, on top of the generic ones. */
   readonly healthChecks: (context: AdapterContext) => Promise<readonly HealthCheck[]>;
 }
@@ -175,4 +185,13 @@ export interface ContentReport {
   readonly written: readonly { slug: string; status: 'created' | 'updated'; id: number }[];
   readonly created: number;
   readonly updated: number;
+}
+
+/** How a frontend reaches the CMS to read it. Secret, and read-only. */
+export interface ReadSide {
+  /** The endpoint to query, relative to the CMS's own URL. */
+  readonly endpoint: string;
+  readonly token: string;
+  /** The sections the token may read — so `client` can say what it opened. */
+  readonly sections: readonly string[];
 }

@@ -6,3 +6,5 @@
  */
 
 export { emitTypes } from './types.js';
+export { CRAFT_DIALECT, emitClient } from './client.js';
+export type { GraphqlDialect } from './client.js';
