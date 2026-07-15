@@ -198,13 +198,19 @@ return [
 /**
  * Craft answers GraphQL at `/api` once `config/routes.php` sends it there — and not before.
  *
- * If the file is not there, we write it. If it *is* there, it is someone's file, and it may hold
- * routes this project depends on. Rewriting it to add one line is not a trade worth making, and
- * parsing PHP to edit it in place is worse. So we read it, and if it does not already route to
- * `graphql/api` we say exactly what to add and stop. A tool that quietly rewrites config it did not
- * write is a tool nobody can trust with a repository.
+ * Three cases, and the middle one is the one a real run taught:
+ *
+ * - **No file.** We write it.
+ * - **The default file.** Every Craft ships a `routes.php` that returns `[]` — boilerplate and an
+ *   empty array. It looked "already there" to a first draft of this, which then refused and told
+ *   the user to edit it by hand, on every fresh scaffold. An empty array is not a config anyone
+ *   wrote; adding a route to it takes nothing away, so we do.
+ * - **A file with real routes.** Now it is someone's, and it may hold routes this project depends
+ *   on. Rewriting it to add one line is not a trade worth making, and parsing PHP to edit it in
+ *   place is worse — so we say exactly what to add and stop. A tool that quietly rewrites config it
+ *   did not write is a tool nobody can trust with a repository.
  */
-const ensureGraphqlRoute = async (root: string): Promise<Result<void, LuminxError>> => {
+export const ensureGraphqlRoute = async (root: string): Promise<Result<void, LuminxError>> => {
   const path = join(root, ROUTES_FILE);
 
   let existing: string;
@@ -218,10 +224,20 @@ const ensureGraphqlRoute = async (root: string): Promise<Result<void, LuminxErro
 
   if (/graphql\/api/.test(existing)) return ok(undefined);
 
+  // `return [ ];` with only whitespace inside — the default, and safe to replace wholesale.
+  if (/return\s*\[\s*\]\s*;/.test(existing)) {
+    await writeFile(path, ROUTES_TEMPLATE, 'utf8');
+    return ok(undefined);
+  }
+
   return err(
-    luminxError(ErrorCode.EnvCmsNotDetected, `${ROUTES_FILE} does not expose GraphQL`, {
-      hint: `Add this to the array it returns, and run again:\n    'api' => 'graphql/api',`,
-    }),
+    luminxError(
+      ErrorCode.EnvCmsNotDetected,
+      `${ROUTES_FILE} already has routes, and none expose GraphQL`,
+      {
+        hint: `Add this to the array it returns, and run again:\n    'api' => 'graphql/api',`,
+      },
+    ),
   );
 };
 
