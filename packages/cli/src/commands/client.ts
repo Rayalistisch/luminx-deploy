@@ -12,8 +12,8 @@
  * commit. Read-only, so even a leaked one cannot rewrite the content it was meant to show.
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join } from 'node:path';
 
 import { compile, loadConfig } from '@luminx/core';
 import type { AdapterRegistry } from '@luminx/core';
@@ -73,6 +73,7 @@ const setEnv = async (path: string, values: Record<string, string>): Promise<voi
       : `${next}${next === '' || next.endsWith('\n') ? '' : '\n'}${line}\n`;
   }
 
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, next, 'utf8');
 };
 
@@ -116,8 +117,17 @@ export const runClient = async (io: Io, options: ClientOptions): Promise<ExitCod
   // The client is generated from the config — the same config the CMS was built from.
   const source = emitClient(compiled.value.model);
   const out = options.out ?? DEFAULT_OUT;
+  const outPath = under(out);
 
-  await writeFile(under(out), source, 'utf8');
+  /**
+   * Make the folder before writing into it.
+   *
+   * `src/lib/` may not exist yet, and a bare `writeFile` then throws a raw ENOENT — which surfaced
+   * as "LX5001, internal error, a bug in LuminX" for a missing directory that is the ordinary case.
+   * Creating a folder for a file you were asked to write is not a surprise; it is the job.
+   */
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, source, 'utf8');
 
   /**
    * The token goes to `.env`, and only there.

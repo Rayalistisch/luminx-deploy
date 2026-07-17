@@ -1,6 +1,6 @@
 {
   "name": "@luminx/codegen",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "description": "The content model, projected into TypeScript. One source of truth for the CMS and the frontend.",
