@@ -327,12 +327,24 @@ export const scaffoldCraft = async (
     );
   }
 
-  const enabled = await run('Enabling the plugin in Craft', 'ddev', [
-    'craft',
-    'plugin/install',
-    'luminx',
-  ]);
-  if (enabled !== null) return err(enabled);
+  /**
+   * Enabling the plugin, idempotently — because "already installed" is success, not failure.
+   *
+   * Craft's own plugin installer (`craftcms/plugin-installer`, allowed above) sometimes installs and
+   * enables the plugin during `composer require`. When it does, this explicit `plugin/install` then
+   * exits non-zero with "LuminX is already installed" — and the scaffold aborted on the very last
+   * step, after Craft was up, the plugin was in, and everything actually worked. The plugin being
+   * present is the goal; how it got there is not. So an "already installed" exit is treated as the
+   * success it is. Found on a real `luminx new`, one step from the finish.
+   */
+  step('Enabling the plugin in Craft');
+  const enabled = await exec('ddev', ['craft', 'plugin/install', 'luminx'], root);
+  const alreadyEnabled = /already installed|already enabled/i.test(
+    `${enabled.stdout} ${enabled.stderr}`,
+  );
+  if (enabled.code !== 0 && !alreadyEnabled) {
+    return err(failed('Enabling the plugin in Craft', enabled));
+  }
 
   return ok({
     root,

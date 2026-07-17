@@ -1,6 +1,6 @@
 {
   "name": "luminx",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "description": "Manage your CMS content model from a config file. Deterministic, reviewable, reversible.",
   "keywords": [

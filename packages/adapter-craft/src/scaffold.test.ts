@@ -78,6 +78,36 @@ describe('scaffoldCraft', () => {
     ]);
   });
 
+  /**
+   * "Already installed" is success, not failure.
+   *
+   * Craft's composer plugin-installer sometimes enables the plugin during `composer require`, so the
+   * explicit `plugin/install` then exits non-zero with "already installed" — and the scaffold used
+   * to abort on the last step, after everything actually worked. It must finish.
+   */
+  it('treats an already-installed plugin as success, not a failed step', async () => {
+    const rec = recorder({
+      match: 'plugin/install',
+      result: { code: 1, stdout: 'LuminX is already installed.', stderr: '' },
+    });
+
+    const result = await scaffoldCraft(options, {}, deps(rec));
+
+    expect(result.ok).toBe(true);
+  });
+
+  // Any *other* failure of that step is still a real failure.
+  it('still fails when the plugin cannot be enabled for a real reason', async () => {
+    const rec = recorder({
+      match: 'plugin/install',
+      result: { code: 1, stdout: '', stderr: 'Plugin not found' },
+    });
+
+    const result = await scaffoldCraft(options, {}, deps(rec));
+
+    expect(result.ok).toBe(false);
+  });
+
   // The one mistake nothing in this codebase can undo. Refuse rather than merge into it.
   it('refuses a directory that already has files', async () => {
     const rec = recorder();

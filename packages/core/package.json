@@ -1,6 +1,6 @@
 {
   "name": "@luminx/core",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Config compiler, differ, planner and executor. Knows no CMS.",
